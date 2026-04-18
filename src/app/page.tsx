@@ -591,7 +591,7 @@ export default function Home() {
       setToastMessage('Foto atualizada!');
     } catch (err: any) {
       console.error(err);
-      alert('Erro ao carregar avatar: ' + err.message);
+      alert('Erro Supabase (Avatar): ' + JSON.stringify(err));
     } finally {
       setTimeout(() => setToastMessage(''), 3000);
     }
@@ -599,7 +599,7 @@ export default function Home() {
 
   const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!session || !userProfile) return;
+    if (!session) return;
     
     const formData = new FormData(e.currentTarget);
     const fullName = formData.get('full_name') as string;
@@ -612,11 +612,12 @@ export default function Home() {
         
       if (error) throw error;
       
-      setUserProfile({ ...userProfile, full_name: fullName });
+      setUserProfile(prev => prev ? { ...prev, full_name: fullName } : { id: session.user.id, full_name: fullName, avatar_url: '' });
       setIsProfileModalOpen(false);
       setToastMessage('Perfil atualizado!');
     } catch (err: any) {
-      alert('Erro: ' + err.message);
+      console.error(err);
+      alert('Erro Supabase (Perfil): ' + JSON.stringify(err));
     } finally {
       setIsSaving(false);
       setTimeout(() => setToastMessage(''), 3000);
