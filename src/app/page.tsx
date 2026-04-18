@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { supabase } from '../lib/supabase';
+import AuthScreen from '../components/AuthScreen';
 
 // --- Types ---
 type Account = {
@@ -40,49 +42,30 @@ type TransactionRecord = {
   hasReminder: boolean;
   reminderTime?: string;
   isCritical?: boolean;
+  ocrUrl?: string;
 };
 
-// --- Initial Data ---
-const initialAccounts: Account[] = [
-  { id: '1', name: 'Conta Pessoal', balance: 2500, income: 3500, expense: 1000, iconColor: 'bg-purple-500', isDefault: true },
-  { id: '2', name: 'Reserva', balance: 1750, income: 1750, expense: 0, iconColor: 'bg-emerald-500' }
-];
-
-const initialCategories: Category[] = [
-  { id: 'c1', name: 'Alimentação', type: 'expense', iconColor: 'text-orange-500', iconPath: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' },
-  { id: 'c2', name: 'Salário', type: 'income', iconColor: 'text-blue-500', iconPath: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  { id: 'c3', name: 'Lazer', type: 'expense', iconColor: 'text-pink-500', iconPath: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' },
-  { id: 'c4', name: 'Habitação', type: 'expense', iconColor: 'text-indigo-500', iconPath: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' }
-];
-
-const initialSubcategories: Subcategory[] = [
-  { id: 'sc1', categoryId: 'c1', name: 'Supermercado' },
-  { id: 'sc2', categoryId: 'c1', name: 'Restaurantes' },
-  { id: 'sc3', categoryId: 'c4', name: 'Aluguel' },
-  { id: 'sc4', categoryId: 'c4', name: 'Luz' },
-  { id: 'sc5', categoryId: 'c4', name: 'Água' },
-];
-
-const initialTransactions: TransactionRecord[] = [
-  { id: 't4', type: 'expense', amount: 85, date: 'Hoje, 10:30', categoryId: 'c4', accountId: '1', description: 'Internet', hasReminder: true, reminderTime: 'at_time', isCritical: true },
-  { id: 't1', type: 'income', amount: 5000, date: 'Hoje, 10:00', categoryId: 'c2', accountId: '1', description: 'Salário', hasReminder: false },
-  { id: 't2', type: 'expense', amount: 750, date: 'Ontem, 19:45', categoryId: 'c1', accountId: '1', description: 'Supermercado', hasReminder: false },
-  { id: 't3', type: 'expense', amount: 150, date: 'Amanhã, 14:00', categoryId: 'c4', accountId: '1', description: 'Conta de Luz', hasReminder: true, reminderTime: '24_hours' },
-];
+// No initial mock data, entirely DB driven
 
 export default function Home() {
+  // Auth & DB
+  const [session, setSession] = useState<any>(null);
+  const [isLoadingDb, setIsLoadingDb] = useState(true);
+
   // Navigation & Views
   const [currentView, setCurrentView] = useState<'dashboard' | 'transactions' | 'accounts' | 'reports' | 'categories' | 'alerts' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Accounts State
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [isAccountFormOpen, setIsAccountFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [accountName, setAccountName] = useState('');
+  const [initialBalance, setInitialBalance] = useState('');
 
   // Categories & Subcategories State
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [subcategories, setSubcategories] = useState<Subcategory[]>(initialSubcategories);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCatType, setNewCatType] = useState<'expense'|'income'>('expense');
@@ -92,11 +75,86 @@ export default function Home() {
   const [subcatParentId, setSubcatParentId] = useState<string>('');
 
   // Transactions list mock state
-  const [transactions, setTransactions] = useState<TransactionRecord[]>(initialTransactions);
-  const [activeAlertId, setActiveAlertId] = useState<string | null>(
-    initialTransactions.find(t => t.isCritical)?.id || null
-  );
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [activeAlertId, setActiveAlertId] = useState<string | null>(null);
   const [showCriticalToast, setShowCriticalToast] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchData(session.user.id);
+      else setIsLoadingDb(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchData(session.user.id);
+      else setIsLoadingDb(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchData = async (userId: string) => {
+    setIsLoadingDb(true);
+    try {
+      const { data: accs } = await supabase.from('accounts').select('*').eq('user_id', userId);
+      
+      if (!accs || accs.length === 0) {
+        // Create default account for new users
+        await supabase.from('accounts').insert({
+          user_id: userId,
+          name: 'Minha Carteira',
+          balance: 0
+        });
+        // Refetch accounts
+        const { data: newAccs } = await supabase.from('accounts').select('*').eq('user_id', userId);
+        if (newAccs && newAccs.length > 0) {
+          setAccounts(newAccs.map(a => ({ id: a.id, name: a.name, balance: a.balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
+          const def = newAccs.find(a => a.is_default) || newAccs[0];
+          setSelectedAccountId(def.id);
+        }
+      } else {
+        setAccounts(accs.map(a => ({ id: a.id, name: a.name, balance: a.balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
+        const def = accs.find(a => a.is_default) || accs[0];
+        setSelectedAccountId(def.id);
+      }
+      
+      const { data: cats, error: catsError } = await supabase.from('categories').select('*').eq('user_id', userId);
+      if (catsError && catsError.code !== 'PGRST116') {
+        console.warn('Tabela categories pode não existir ou erro no acesso:', catsError.message);
+      }
+      
+      if (!cats || cats.length === 0) {
+        // Se a tabela existir mas estiver vazia, tentamos criar padrões. Se der 404, falhará silenciosamente.
+        try {
+          await supabase.from('categories').insert([
+            { user_id: userId, name: 'Alimentação', type: 'expense', icon_color: 'text-orange-500', icon_path: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' },
+            { user_id: userId, name: 'Salário', type: 'income', icon_color: 'text-blue-500', icon_path: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+            { user_id: userId, name: 'Lazer', type: 'expense', icon_color: 'text-pink-500', icon_path: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' },
+            { user_id: userId, name: 'Habitação', type: 'expense', icon_color: 'text-indigo-500', icon_path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' }
+          ]);
+          const { data: newCats } = await supabase.from('categories').select('*').eq('user_id', userId);
+          if (newCats) setCategories(newCats.map(c => ({ id: c.id, name: c.name, type: c.type, iconColor: c.icon_color, iconPath: c.icon_path })));
+        } catch (err) {
+          console.error('Erro ao inicializar categorias:', err);
+        }
+      } else {
+        setCategories(cats.map(c => ({ id: c.id, name: c.name, type: c.type, iconColor: c.icon_color, iconPath: c.icon_path })));
+      }
+      
+      const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId);
+      if (txs) {
+        setTransactions(txs.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, categoryId: categories.find(c => c.name === t.category)?.id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
+      } else {
+        setTransactions([]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingDb(false);
+    }
+  };
 
   useEffect(() => {
     if (activeAlertId) {
@@ -136,23 +194,27 @@ export default function Home() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [description, setDescription] = useState('');
+  const [ocrUrl, setOcrUrl] = useState('');
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
 
   // Transaction Selectors
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(initialAccounts[0].id);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>('');
 
   // Reports Filter State
   const [reportsAccount, setReportsAccount] = useState<string>('all');
-  const [reportsMonth, setReportsMonth] = useState<number>(new Date().getMonth() + 1);
-  const [reportsYear, setReportsYear] = useState<number>(new Date().getFullYear());
+  const [reportsStartDate, setReportsStartDate] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [reportsEndDate, setReportsEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [reportNotes, setReportNotes] = useState<string>('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [transactionsMonth, setTransactionsMonth] = useState<number>(new Date().getMonth() + 1);
   const [transactionsYear, setTransactionsYear] = useState<number>(new Date().getFullYear());
 
-  // Notifications
+  // Notifications & Loaders
   const [toastMessage, setToastMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Computed
   const totalBalance = accounts.reduce((acc, curr) => acc + curr.balance, 0);
@@ -185,7 +247,7 @@ export default function Home() {
     setTransactionType(t.type);
     setAmount(t.amount.toString().replace('.', ','));
     setDescription(t.description);
-    setSelectedAccountId(t.accountId || initialAccounts[0].id);
+    setSelectedAccountId(t.accountId || (accounts[0] ? accounts[0].id : ''));
     setSelectedCategoryId(t.categoryId || '');
     setTransactionDate(t.date.includes('-') ? t.date : new Date().toISOString().split('T')[0]);
     setIsReminderActive(t.hasReminder);
@@ -210,162 +272,331 @@ export default function Home() {
     setTransactionDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
   };
 
-  const handleSaveTransaction = () => {
+  const handleSaveTransaction = async () => {
     const numAmount = parseFloat(amount.replace(',', '.'));
     if (numAmount === 0 && !editingTransactionId) return;
     
+    setIsSaving(true);
     let diff = 0;
     
-    if (editingTransactionId) {
-      const oldTx = transactions.find(t => t.id === editingTransactionId);
-      const oldAmount = oldTx ? oldTx.amount : 0;
-      diff = transactionType === 'income' ? numAmount - oldAmount : oldAmount - numAmount;
-      
-      const newTx: TransactionRecord = {
-        id: editingTransactionId,
-        type: transactionType,
-        amount: numAmount,
-        date: transactionDate,
-        accountId: selectedAccountId,
-        categoryId: selectedCategoryId,
-        description,
-        hasReminder: isReminderActive,
-        reminderTime: isReminderActive ? reminderTime : undefined,
-        isCritical: oldTx?.isCritical
-      };
-      setTransactions(prev => prev.map(t => t.id === editingTransactionId ? newTx : t));
-      setToastMessage('Transação atualizada com sucesso');
-    } else {
-      diff = transactionType === 'income' ? numAmount : -numAmount;
-      const newTx: TransactionRecord = {
-        id: Date.now().toString(),
-        type: transactionType,
-        amount: numAmount,
-        date: transactionDate,
-        accountId: selectedAccountId,
-        categoryId: selectedCategoryId,
-        description,
-        hasReminder: isReminderActive,
-        reminderTime: isReminderActive ? reminderTime : undefined,
-      };
-      setTransactions(prev => [newTx, ...prev]);
-      setToastMessage('Transação salva com sucesso');
-    }
+    // Resolve category name from ID
+    const categoryName = categories.find(c => c.id === selectedCategoryId)?.name || '';
     
-    if (diff !== 0) {
-      setAccounts(prev => prev.map(a => a.id === selectedAccountId ? { ...a, balance: a.balance + diff } : a));
-    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
 
-    setTimeout(() => setToastMessage(''), 3000);
-    handleCloseForm();
+      if (editingTransactionId) {
+        const oldTx = transactions.find(t => t.id === editingTransactionId);
+        const oldAmount = oldTx ? oldTx.amount : 0;
+        diff = transactionType === 'income' ? numAmount - oldAmount : oldAmount - numAmount;
+        
+        const updatePayload = {
+          type: transactionType,
+          amount: numAmount,
+          date: transactionDate,
+          account_id: selectedAccountId,
+          category: categoryName,
+          description,
+          ocr_url: ocrUrl || null,
+        };
+        console.log('Tentando atualizar:', updatePayload);
+        const { error } = await supabase.from('transactions').update(updatePayload).eq('id', editingTransactionId);
+        if (error) {
+          console.log('Erro do Supabase:', error);
+          alert('Erro Supabase: ' + error.message);
+          throw error;
+        }
+        
+        setToastMessage('Transação atualizada com sucesso');
+      } else {
+        diff = transactionType === 'income' ? numAmount : -numAmount;
+        
+        const insertPayload = {
+          user_id: user.id,
+          type: transactionType,
+          amount: numAmount,
+          date: transactionDate,
+          account_id: selectedAccountId,
+          category: categoryName,
+          description,
+          ocr_url: ocrUrl || null,
+        };
+        console.log('Tentando salvar:', insertPayload);
+        const { error } = await supabase.from('transactions').insert(insertPayload);
+        if (error) {
+          console.log('Erro do Supabase:', error);
+          alert('Erro Supabase: ' + error.message);
+          throw error;
+        }
+        
+        setToastMessage('Transação salva com sucesso');
+      }
+      
+      if (diff !== 0 && selectedAccountId) {
+        const acc = accounts.find(a => a.id === selectedAccountId);
+        if (acc) {
+          const newBalance = acc.balance + diff;
+          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+          if (accErr) {
+            console.log('Erro ao atualizar saldo:', accErr);
+            alert('Erro saldo: ' + accErr.message);
+            throw accErr;
+          }
+        }
+      }
+      
+      await fetchData(user.id);
+      setTimeout(() => setToastMessage(''), 3000);
+      handleCloseForm();
+    } catch (error: any) {
+      console.error('Erro detalhado Supabase:', error);
+      setToastMessage(error.message || 'Erro ao salvar transação');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteTransaction = () => {
+  const handleDeleteTransaction = async () => {
     if (editingTransactionId && window.confirm('Tem a certeza que deseja excluir esta transação?')) {
-      const oldTx = transactions.find(t => t.id === editingTransactionId);
-      if (oldTx) {
-        const diff = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
-        setAccounts(prev => prev.map(a => a.id === selectedAccountId ? { ...a, balance: a.balance + diff } : a));
+      try {
+        const oldTx = transactions.find(t => t.id === editingTransactionId);
+        if (oldTx) {
+          const diff = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+          await supabase.from('transactions').delete().eq('id', editingTransactionId);
+          
+          const acc = accounts.find(a => a.id === oldTx.accountId);
+          if (acc) {
+            await supabase.from('accounts').update({ balance: acc.balance + diff }).eq('id', acc.id);
+          }
+          fetchData(session.user.id);
+          setToastMessage('Transação excluída com sucesso');
+        }
+      } catch (error) {
+        console.error(error);
+        setToastMessage('Erro ao excluir transação');
       }
-      setTransactions(prev => prev.filter(t => t.id !== editingTransactionId));
-      setToastMessage('Transação excluída com sucesso');
       setTimeout(() => setToastMessage(''), 3000);
       handleCloseForm();
     }
   };
 
-  const generatePDFReport = () => {
+  const getBase64ImageFromURL = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.setAttribute('crossOrigin', 'anonymous');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0);
+        const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(dataURL);
+      };
+      img.onerror = (error) => reject(error);
+      img.src = url;
+    });
+  };
+
+  const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
-    setToastMessage('A gerar PDF...');
+    setToastMessage('A carregar comprovativos...');
     
-    setTimeout(() => {
-      try {
-        const doc = new jsPDF();
-        
-        const accountName = reportsAccount === 'all' ? 'Todas as Contas' : (accounts.find(a => a.id === reportsAccount)?.name || '');
-        const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-        const periodStr = `${months[reportsMonth - 1]} ${reportsYear}`;
+    try {
+      const doc = new jsPDF();
+      
+      const accountName = reportsAccount === 'all' ? 'Todas as Contas' : (accounts.find(a => a.id === reportsAccount)?.name || '');
+      const periodStr = `De ${formatDateDisplay(reportsStartDate)} até ${formatDateDisplay(reportsEndDate)}`;
 
-        // Header
-        doc.setFontSize(22);
-        doc.setTextColor(20, 20, 20);
-        doc.text('Relatório Financeiro', 14, 22);
-        
-        doc.setFontSize(11);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Conta: ${accountName}`, 14, 30);
-        doc.text(`Período: ${periodStr}`, 14, 36);
+      // Header
+      doc.setFontSize(22);
+      doc.setTextColor(20, 20, 20);
+      doc.text('Prestação de Contas', 14, 22);
+      
+      doc.setFontSize(11);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Conta: ${accountName}`, 14, 30);
+      doc.text(`Período: ${periodStr}`, 14, 36);
 
-        // Filter transactions logically
-        const filteredForPDF = transactions.filter(t => {
-          const matchAcc = reportsAccount === 'all' ? true : t.accountId === reportsAccount;
-          let matchTime = false;
-          if (t.date.includes('-')) {
-            const [y, m] = t.date.split('-');
-            matchTime = Number(y) === reportsYear && Number(m) === reportsMonth;
-          } else {
-            matchTime = reportsMonth === (new Date().getMonth() + 1) && reportsYear === new Date().getFullYear();
-          }
-          return matchAcc && matchTime;
-        });
+      // Filter transactions
+      const filteredForPDF = transactions.filter(t => {
+        const matchAcc = reportsAccount === 'all' ? true : t.accountId === reportsAccount;
+        const matchTime = t.date >= reportsStartDate && t.date <= reportsEndDate;
+        return matchAcc && matchTime;
+      });
 
-        const totalIn = filteredForPDF.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
-        const totalOut = filteredForPDF.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
-        const balance = totalIn - totalOut;
+      const totalIn = filteredForPDF.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
+      const totalOut = filteredForPDF.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
+      const balance = totalIn - totalOut;
 
-        autoTable(doc, {
-          startY: 45,
-          head: [['Data', 'Descrição', 'Categoria', 'Valor']],
-          body: filteredForPDF.map(t => [
-            t.date,
-            t.description,
-            categories.find(c => c.id === t.categoryId)?.name || '-',
-            { content: `${t.type === 'income' ? '+' : '-'} R$ ${t.amount.toFixed(2)}`, styles: { textColor: t.type === 'income' ? [16, 185, 129] : [244, 63, 94] } }
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [15, 23, 42] },
-        });
+      autoTable(doc, {
+        startY: 45,
+        head: [['Data', 'Descrição', 'Categoria', 'Anexo', 'Valor']],
+        body: filteredForPDF.map(t => [
+          t.date,
+          t.description,
+          categories.find(c => c.id === t.categoryId)?.name || '-',
+          t.ocrUrl ? 'Sim' : 'Não',
+          { content: `${t.type === 'income' ? '+' : '-'} € ${t.amount.toFixed(2)}`, styles: { textColor: t.type === 'income' ? [16, 185, 129] : [244, 63, 94] } }
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42] },
+      });
 
-        const finalY = (doc as any).lastAutoTable.finalY || 45;
-        
+      let finalY = (doc as any).lastAutoTable.finalY || 45;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Total Entradas: € ${totalIn.toFixed(2)}`, 14, finalY + 10);
+      doc.text(`Total Saídas: € ${totalOut.toFixed(2)}`, 14, finalY + 16);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(balance >= 0 ? 16 : 244, balance >= 0 ? 185 : 63, balance >= 0 ? 129 : 94);
+      doc.text(`Balanço Final: € ${balance.toFixed(2)}`, 14, finalY + 26);
+
+      if (reportNotes) {
+        doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
-        doc.setTextColor(80, 80, 80);
-        doc.text(`Total Entradas: R$ ${totalIn.toFixed(2)}`, 14, finalY + 10);
-        doc.text(`Total Saídas: R$ ${totalOut.toFixed(2)}`, 14, finalY + 16);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(balance >= 0 ? 16 : 244, balance >= 0 ? 185 : 63, balance >= 0 ? 129 : 94);
-        doc.text(`Balanço Final: R$ ${balance.toFixed(2)}`, 14, finalY + 26);
-
-        doc.save(`Relatorio_Financas_${reportsMonth}_${reportsYear}.pdf`);
-        setToastMessage('PDF gerado com sucesso!');
-      } catch (error) {
-        console.error(error);
-        setToastMessage('Erro ao gerar PDF.');
-      } finally {
-        setIsGeneratingPDF(false);
-        setTimeout(() => setToastMessage(''), 3000);
+        doc.setTextColor(50, 50, 50);
+        doc.text('Observações:', 14, finalY + 38);
+        const splitNotes = doc.splitTextToSize(reportNotes, 180);
+        doc.text(splitNotes, 14, finalY + 44);
+        finalY += (splitNotes.length * 5) + 44;
       }
-    }, 1500);
+
+      // Secção de Anexos
+      const txsWithImages = filteredForPDF.filter(t => t.ocrUrl);
+      if (txsWithImages.length > 0) {
+        doc.addPage();
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(20, 20, 20);
+        doc.text('Anexos: Comprovantes de Despesas', 14, 20);
+        
+        let imgY = 30;
+        for (const t of txsWithImages) {
+          if (t.ocrUrl) {
+            try {
+              if (imgY > 240) { doc.addPage(); imgY = 20; }
+              const base64 = await getBase64ImageFromURL(t.ocrUrl);
+              doc.addImage(base64, 'JPEG', 14, imgY, 50, 50);
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'normal');
+              doc.text(`${t.date} - ${t.description} (${formatCurrency(t.amount)})`, 14, imgY + 55);
+              doc.setTextColor(0, 0, 255);
+              doc.textWithLink('Ver Imagem Completa', 14, imgY + 60, { url: t.ocrUrl });
+              doc.setTextColor(20, 20, 20);
+              imgY += 75;
+            } catch (err) {
+              console.error('Erro ao carregar imagem para o PDF:', err);
+            }
+          }
+        }
+      }
+
+      doc.save(`Relatorio_Prestacao_Contas_${reportsStartDate}.pdf`);
+      setToastMessage('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error(error);
+      setToastMessage('Erro ao gerar PDF.');
+    } finally {
+      setIsGeneratingPDF(false);
+      setTimeout(() => setToastMessage(''), 3000);
+    }
   };
 
-  const handleSetDefaultAccount = (id: string, e: React.MouseEvent) => {
+  const handleReportFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, transactionId: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    
+    setToastMessage('A carregar comprovativo...');
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${transactionId}_${Math.random()}.${fileExt}`;
+      const filePath = `${session.user.id}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, file);
+        
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(filePath);
+        
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({ ocr_url: publicUrl })
+        .eq('id', transactionId);
+        
+      if (updateError) throw updateError;
+      
+      await fetchData(session.user.id);
+      setToastMessage('Comprovativo anexado com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro no upload: ' + err.message);
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
+    }
+  };
+
+  const handleSetDefaultAccount = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setAccounts(prev => prev.map(a => ({ ...a, isDefault: a.id === id })));
-    setToastMessage('Conta padrão atualizada!');
-    setTimeout(() => setToastMessage(''), 3000);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    try {
+      // Definir todas as outras como não-padrão primeiro
+      await supabase.from('accounts').update({ is_default: false }).eq('user_id', user.id);
+      // Definir a selecionada como padrão
+      const { error } = await supabase.from('accounts').update({ is_default: true }).eq('id', id);
+      
+      if (error) throw error;
+      
+      await fetchData(user.id);
+      setToastMessage('Conta padrão atualizada!');
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error('Erro ao definir conta padrão:', err);
+      alert('Erro: ' + err.message);
+    }
   };
 
-  const handleOcrSimulation = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    
     setIsOcrProcessing(true);
-    setTimeout(() => {
-      setAmount('145,50');
-      const d = new Date();
-      d.setDate(d.getDate() - 1); // Mocked extracting yesterday's date
-      setTransactionDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-      setDescription('Continente - Supermercado');
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${session.user.id}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage.from('comprovativos').upload(filePath, file);
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage.from('comprovativos').getPublicUrl(filePath);
+      
+      setOcrUrl(publicUrl);
+      
+      // Simulate OCR extraction as before
+      setTimeout(() => {
+        setAmount('145,50');
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        setTransactionDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+        setDescription('Continente - Supermercado (OCR)');
+        setIsOcrProcessing(false);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error uploading file:', error);
       setIsOcrProcessing(false);
-    }, 1500);
+      setToastMessage('Erro no upload do comprovativo');
+    }
   };
 
   const handleNumpadPress = (val: string) => {
@@ -381,24 +612,83 @@ export default function Home() {
   const handleDeletePress = () => setAmount(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
 
   // --- Accounts CRUD ---
-  const openNewAccountForm = () => { setEditingAccount(null); setIsAccountFormOpen(true); };
-  const openEditAccountForm = (acc: Account) => { setEditingAccount(acc); setIsAccountFormOpen(true); };
-
-  const saveAccount = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const name = formData.get('name') as string;
-    const balance = parseFloat((formData.get('balance') as string).replace(',', '.'));
-    
-    if (editingAccount) {
-      setAccounts(prev => prev.map(a => a.id === editingAccount.id ? { ...a, name, balance } : a));
-    } else {
-      setAccounts(prev => [...prev, { id: Date.now().toString(), name, balance, income: 0, expense: 0, iconColor: 'bg-blue-500' }]);
-    }
-    setIsAccountFormOpen(false);
+  const openNewAccountForm = () => { 
+    setEditingAccount(null); 
+    setAccountName('');
+    setInitialBalance('');
+    setIsAccountFormOpen(true); 
   };
-  const deleteAccount = () => {
-    if (editingAccount) { setAccounts(prev => prev.filter(a => a.id !== editingAccount.id)); setIsAccountFormOpen(false); }
+  const openEditAccountForm = (acc: Account) => { 
+    setEditingAccount(acc); 
+    setAccountName(acc.name);
+    setInitialBalance(acc.balance.toString());
+    setIsAccountFormOpen(true); 
+  };
+
+  const saveAccount = async (e: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) { 
+      alert('Sessão expirada. Por favor, faça login novamente.');
+      return; 
+    }
+    
+    // Usar estados diretamente em vez de FormData
+    const name = accountName;
+    // Conversão explícita para número (Float)
+    const balance = parseFloat(initialBalance.replace(',', '.')) || 0;
+    
+    setIsSaving(true);
+    try {
+      if (editingAccount) {
+        const payload = { name, balance };
+        console.log('Tentando atualizar conta:', payload);
+        const { error } = await supabase.from('accounts').update(payload).eq('id', editingAccount.id);
+        if (error) {
+          alert('Erro Supabase: ' + JSON.stringify(error));
+          throw error;
+        }
+        setToastMessage('Conta atualizada com sucesso');
+      } else {
+        const payload = {
+          user_id: user.id,
+          name: name,
+          balance: balance
+        };
+        console.log('Tentando salvar conta:', payload);
+        const { error } = await supabase.from('accounts').insert(payload);
+        if (error) {
+          alert('Erro Supabase: ' + JSON.stringify(error));
+          throw error;
+        }
+        setToastMessage('Conta criada com sucesso');
+      }
+      
+      await fetchData(user.id);
+      setIsAccountFormOpen(false);
+    } catch (error: any) {
+      console.error('Erro detalhado:', error);
+      setToastMessage(error.message || 'Erro ao salvar conta');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setToastMessage(''), 3000);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!editingAccount || !session?.user?.id) return;
+    try {
+      await supabase.from('accounts').delete().eq('id', editingAccount.id);
+      await fetchData(session.user.id);
+      setIsAccountFormOpen(false);
+      setToastMessage('Conta eliminada com sucesso');
+    } catch (error) {
+      console.error(error);
+      setToastMessage('Erro ao eliminar conta');
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
+    }
   };
 
   // --- Categories CRUD ---
@@ -413,32 +703,69 @@ export default function Home() {
     setIsCategoryFormOpen(true); 
   };
 
-  const saveCategory = (e: React.FormEvent<HTMLFormElement>) => {
+  const saveCategory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     const formData = new FormData(e.currentTarget);
     const name = formData.get('name') as string;
     const iconColor = newCatType === 'expense' ? 'text-orange-500' : 'text-emerald-500';
     const iconPath = 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z'; // Tag icon
     
-    let newId = Date.now().toString();
-    if (editingCategory) {
-      setCategories(prev => prev.map(c => c.id === editingCategory.id ? { ...c, name, type: newCatType } : c));
-      newId = editingCategory.id;
-    } else {
-      setCategories(prev => [...prev, { id: newId, name, type: newCatType, iconColor, iconPath }]);
-    }
+    setIsSaving(true);
+    let newId = '';
     
-    setIsCategoryFormOpen(false);
-    
-    if (isFormOpen) {
-      setSelectedCategoryId(newId);
+    try {
+      if (editingCategory) {
+        const { error } = await supabase.from('categories').update({
+          name,
+          type: newCatType,
+          icon_color: iconColor,
+          icon_path: iconPath
+        }).eq('id', editingCategory.id);
+        if (error) throw error;
+        newId = editingCategory.id;
+        setToastMessage('Categoria atualizada com sucesso');
+      } else {
+        const { data, error } = await supabase.from('categories').insert({
+          user_id: user.id,
+          name,
+          type: newCatType,
+          icon_color: iconColor,
+          icon_path: iconPath
+        }).select().single();
+        if (error) throw error;
+        if (data) newId = data.id;
+        setToastMessage('Categoria criada com sucesso');
+      }
+      
+      await fetchData(user.id);
+      setIsCategoryFormOpen(false);
+      
+      if (isFormOpen && newId) {
+        setSelectedCategoryId(newId);
+      }
+    } catch (error: any) {
+      console.error('Erro detalhado Supabase:', error);
+      setToastMessage(error.message || 'Erro ao salvar categoria');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setToastMessage(''), 3000);
     }
   };
-  const deleteCategory = () => {
-    if (editingCategory) { 
-      setCategories(prev => prev.filter(c => c.id !== editingCategory.id));
-      setSubcategories(prev => prev.filter(s => s.categoryId !== editingCategory.id));
-      setIsCategoryFormOpen(false); 
+
+  const deleteCategory = async () => {
+    if (!editingCategory || !session?.user?.id) return;
+    try {
+      await supabase.from('categories').delete().eq('id', editingCategory.id);
+      await fetchData(session.user.id);
+      setIsCategoryFormOpen(false);
+      setToastMessage('Categoria eliminada com sucesso');
+    } catch (error) {
+      console.error(error);
+      setToastMessage('Erro ao eliminar categoria');
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
     }
   };
 
@@ -481,7 +808,7 @@ export default function Home() {
   };
 
   // --- Utils ---
-  const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const formatCurrency = (val: number | undefined | null) => (Number(val) || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
   
   const formatDateDisplay = (dateStr: string) => {
     const today = new Date();
@@ -513,8 +840,24 @@ export default function Home() {
   }[recurringType];
 
   const filteredTransactionCategories = categories.filter(c => c.type === transactionType);
-  const activeCategoryObj = categories.find(c => c.id === selectedCategoryId) || filteredTransactionCategories[0] || initialCategories[0];
+  const activeCategoryObj = categories.find(c => c.id === selectedCategoryId) || filteredTransactionCategories[0] || categories[0] || { id: '', name: 'Sem Categoria', type: 'expense', iconColor: 'text-gray-500', iconPath: '' };
   const activeCategorySubcategories = subcategories.filter(s => s.categoryId === activeCategoryObj.id);
+
+  if (isLoadingDb) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white space-y-4">
+        <svg className="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-gray-400 font-medium animate-pulse">A sincronizar dados...</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white font-sans flex flex-col relative pb-24 overflow-hidden">
@@ -673,13 +1016,20 @@ export default function Home() {
             <div className="space-y-4">
               <h2 className="text-xl font-semibold mb-4">Minhas Contas</h2>
               <div className="grid grid-cols-2 gap-3">
-                {accounts.filter(acc => acc.balance > 0).map(acc => (
-                  <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-28 active:scale-95 transition-transform cursor-pointer" onClick={() => setCurrentView('accounts')}>
+                {accounts.filter(acc => !acc.isDefault).map(acc => (
+                  <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-32 active:scale-95 transition-transform cursor-pointer relative group" onClick={() => setCurrentView('accounts')}>
+                    <button 
+                      onClick={(e) => handleSetDefaultAccount(acc.id, e)} 
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-gray-800 text-gray-500 hover:text-yellow-500 transition-colors"
+                      title="Tornar Padrão"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.54 1.118l-3.976-2.888a1 1 0 00-1.175 0l-3.976 2.888c-.784.57-1.838-.197-1.539-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.382-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+                    </button>
                     <div className="flex items-center space-x-2">
                       <div className={`w-6 h-6 rounded-full ${acc.iconColor}/20 flex items-center justify-center`}>
                         <div className={`w-2 h-2 rounded-full ${acc.iconColor}`} />
                       </div>
-                      <span className="font-medium text-sm text-white truncate">{acc.name}</span>
+                      <span className="font-medium text-sm text-white truncate pr-6">{acc.name}</span>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Saldo Atual</p>
@@ -705,7 +1055,7 @@ export default function Home() {
                           Agenda Urgente
                         </h2>
                         {urgent.slice(0, 3).map(t => {
-                          const cat = categories.find(c => c.id === t.categoryId) || initialCategories[0];
+                          const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
                           return (
                             <div key={t.id} onClick={() => setActiveAlertId(t.id)} className={`p-4 bg-gray-900 rounded-2xl border flex items-center justify-between transition-all cursor-pointer active:scale-95 ${t.isCritical ? 'animate-pulse-red border-rose-500 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.05)] hover:border-yellow-500/40'}`}>
                               <div className="flex items-center space-x-4">
@@ -729,7 +1079,7 @@ export default function Home() {
                     <div className="space-y-3 pt-2">
                       <h2 className="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-4">Últimas Transações</h2>
                       {recent.slice(0, recentLimit).map(t => {
-                        const cat = categories.find(c => c.id === t.categoryId) || initialCategories[0];
+                        const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
                         return (
                           <div key={t.id} onClick={() => handleOpenEditForm(t)} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between cursor-pointer active:scale-95 transition-transform">
                             <div className="flex items-center space-x-4">
@@ -810,7 +1160,7 @@ export default function Home() {
                   <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-2">{dateLabel}</h3>
                   <div className="space-y-3">
                     {txs.map(t => {
-                      const cat = categories.find(c => c.id === t.categoryId) || initialCategories[0];
+                      const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
                       return (
                         <div key={t.id} onClick={() => handleOpenEditForm(t)} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between cursor-pointer active:scale-95 transition-transform shadow-sm">
                           <div className="flex items-center space-x-4">
@@ -843,7 +1193,7 @@ export default function Home() {
             </h2>
             <div className="space-y-4">
               {transactions.filter(t => t.hasReminder).map(t => {
-                   const cat = categories.find(c => c.id === t.categoryId) || initialCategories[0];
+                   const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
                    return (
                      <div key={t.id} className="p-4 bg-gray-900 rounded-2xl border border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.05)] flex items-center justify-between">
                        <div className="flex items-center space-x-4">
@@ -941,10 +1291,10 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-4">Relatórios</h2>
             
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="col-span-2 bg-gray-900 p-3 rounded-xl border border-gray-800">
-                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Conta Analisada</span>
+              <div className="col-span-2 bg-gray-900 p-3 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Filtro por Conta</span>
                 <select 
-                  className="bg-transparent text-sm font-medium text-white outline-none w-full appearance-none cursor-pointer"
+                  className="bg-transparent text-sm font-medium text-white outline-none w-full cursor-pointer"
                   value={reportsAccount}
                   onChange={(e) => setReportsAccount(e.target.value)}
                 >
@@ -953,39 +1303,34 @@ export default function Home() {
                 </select>
               </div>
 
-              <div className="bg-gray-900 p-3 rounded-xl border border-gray-800">
-                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Mês</span>
-                <select 
+              <div className="bg-gray-900 p-3 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Início</span>
+                <input 
+                  type="date"
                   className="bg-transparent text-sm font-medium text-white outline-none w-full appearance-none cursor-pointer"
-                  value={reportsMonth}
-                  onChange={(e) => setReportsMonth(Number(e.target.value))}
-                >
-                  <option value={1}>Janeiro</option>
-                  <option value={2}>Fevereiro</option>
-                  <option value={3}>Março</option>
-                  <option value={4}>Abril</option>
-                  <option value={5}>Maio</option>
-                  <option value={6}>Junho</option>
-                  <option value={7}>Julho</option>
-                  <option value={8}>Agosto</option>
-                  <option value={9}>Setembro</option>
-                  <option value={10}>Outubro</option>
-                  <option value={11}>Novembro</option>
-                  <option value={12}>Dezembro</option>
-                </select>
+                  value={reportsStartDate}
+                  onChange={(e) => setReportsStartDate(e.target.value)}
+                />
               </div>
 
-              <div className="bg-gray-900 p-3 rounded-xl border border-gray-800">
-                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Ano</span>
-                <select 
-                  className="bg-transparent text-sm font-medium text-white outline-none w-full appearance-none cursor-pointer text-center"
-                  value={reportsYear}
-                  onChange={(e) => setReportsYear(Number(e.target.value))}
-                >
-                  <option value={2024}>2024</option>
-                  <option value={2025}>2025</option>
-                  <option value={2026}>2026</option>
-                </select>
+              <div className="bg-gray-900 p-3 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Fim</span>
+                <input 
+                  type="date"
+                  className="bg-transparent text-sm font-medium text-white outline-none w-full appearance-none cursor-pointer"
+                  value={reportsEndDate}
+                  onChange={(e) => setReportsEndDate(e.target.value)}
+                />
+              </div>
+
+              <div className="col-span-2 bg-gray-900 p-3 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Observações do Relatório</span>
+                <textarea 
+                  className="bg-transparent text-sm font-medium text-white outline-none w-full min-h-[100px] resize-none scrollbar-hide"
+                  placeholder="Ex: Falta depositar X, Ajuste de caixa realizado..."
+                  value={reportNotes}
+                  onChange={(e) => setReportNotes(e.target.value)}
+                />
               </div>
             </div>
 
@@ -1013,13 +1358,7 @@ export default function Home() {
             {(() => {
               const filteredTxs = transactions.filter(t => {
                 const matchAcc = reportsAccount === 'all' ? true : t.accountId === reportsAccount;
-                let matchTime = false;
-                if (t.date.includes('-')) {
-                  const [y, m] = t.date.split('-');
-                  matchTime = Number(y) === reportsYear && Number(m) === reportsMonth;
-                } else {
-                  matchTime = reportsMonth === (new Date().getMonth() + 1) && reportsYear === new Date().getFullYear();
-                }
+                const matchTime = t.date >= reportsStartDate && t.date <= reportsEndDate;
                 return matchAcc && matchTime;
               });
 
@@ -1028,52 +1367,82 @@ export default function Home() {
               const balance = totalIn - totalOut;
 
               return (
-                <div className="bg-gray-900 p-5 rounded-[1.5rem] border border-gray-800 flex justify-between items-center mb-6">
-                  <div className="text-center">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Entradas</p>
-                    <p className="text-emerald-500 font-semibold">{formatCurrency(totalIn)}</p>
+                <>
+                  <div className="bg-gray-900 p-5 rounded-[1.5rem] border border-gray-800 flex justify-between items-center mb-8">
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Entradas</p>
+                      <p className="text-emerald-500 font-semibold">{formatCurrency(totalIn)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-gray-800"></div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saídas</p>
+                      <p className="text-rose-500 font-semibold">{formatCurrency(totalOut)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-gray-800"></div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Balanço</p>
+                      <p className={`font-bold ${balance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>{formatCurrency(balance)}</p>
+                    </div>
                   </div>
-                  <div className="w-px h-8 bg-gray-800"></div>
-                  <div className="text-center">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saídas</p>
-                    <p className="text-rose-500 font-semibold">{formatCurrency(totalOut)}</p>
+
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2">Detalhamento de Despesas</h3>
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto scrollbar-hide pr-1">
+                      {filteredTxs.length === 0 ? (
+                        <div className="text-center py-10 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800">
+                          <p className="text-gray-500 text-sm">Nenhuma transação no período.</p>
+                        </div>
+                      ) : (
+                        filteredTxs.map(t => {
+                          const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
+                          return (
+                            <div key={t.id} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between active:scale-[0.99] transition-all shadow-sm">
+                              <div className="flex items-center space-x-4 min-w-0 flex-1">
+                                <div onClick={() => handleOpenEditForm(t)} className={`w-10 h-10 rounded-full ${cat.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'} flex items-center justify-center relative shrink-0 cursor-pointer`}>
+                                  <svg className={`w-5 h-5 ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.iconPath} /></svg>
+                                </div>
+                                <div className="min-w-0 cursor-pointer" onClick={() => handleOpenEditForm(t)}>
+                                  <p className="text-white font-medium text-sm truncate">{t.description}</p>
+                                  <p className="text-gray-500 text-[10px]">{formatDateDisplay(t.date)}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center space-x-4">
+                                <div className="flex flex-col items-center">
+                                  {t.ocrUrl ? (
+                                    <div className="group relative">
+                                      <img 
+                                        src={t.ocrUrl} 
+                                        alt="Recibo" 
+                                        onClick={(e) => { e.stopPropagation(); setLightboxUrl(t.ocrUrl || null); }}
+                                        className="w-10 h-10 rounded-lg object-cover border border-gray-700 hover:border-blue-500 transition-colors cursor-pointer" 
+                                      />
+                                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center border-2 border-gray-950">
+                                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <label className="w-10 h-10 rounded-lg bg-gray-800 border border-dashed border-gray-700 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700 hover:border-gray-500 transition-all">
+                                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleReportFileUpload(e, t.id)} />
+                                    </label>
+                                  )}
+                                  <span className="text-[8px] text-gray-500 uppercase mt-1 tracking-tighter">Anexo</span>
+                                </div>
+
+                                <p className={`font-semibold text-sm whitespace-nowrap ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {cat.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                  <div className="w-px h-8 bg-gray-800"></div>
-                  <div className="text-center">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Balanço</p>
-                    <p className="text-blue-500 font-bold">{formatCurrency(balance)}</p>
-                  </div>
-                </div>
+                </>
               );
             })()}
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Transações</h3>
-              {transactions.map(t => {
-                const cat = categories.find(c => c.id === t.categoryId) || initialCategories[0];
-                return (
-                  <div key={t.id} onClick={() => handleOpenEditForm(t)} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between active:scale-95 transition-transform cursor-pointer">
-                    <div className="flex items-center space-x-4">
-                      <div className={`w-10 h-10 rounded-full ${cat.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'} flex items-center justify-center relative`}>
-                        <svg className={`w-5 h-5 ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.iconPath} /></svg>
-                        {t.hasReminder && (
-                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-900 rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-yellow-500" fill="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">{t.description}</p>
-                        <p className="text-gray-500 text-xs">{t.date}</p>
-                      </div>
-                    </div>
-                    <p className={`font-semibold ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {cat.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
       </main>
@@ -1108,11 +1477,11 @@ export default function Home() {
             <form onSubmit={saveAccount} className="space-y-4">
               <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 focus-within:border-blue-500 transition-colors">
                 <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Nome da Conta</label>
-                <input name="name" type="text" defaultValue={editingAccount?.name || ''} placeholder="Ex: Cofre, Reserva..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
+                <input value={accountName} onChange={(e) => setAccountName(e.target.value)} type="text" placeholder="Ex: Cofre, Reserva..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
               </div>
               <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 focus-within:border-blue-500 transition-colors">
-                <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Saldo Inicial (R$)</label>
-                <input name="balance" type="number" step="0.01" defaultValue={editingAccount?.balance || ''} placeholder="0,00" className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Saldo Inicial (€)</label>
+                <input value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)} type="text" placeholder="0.00" className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
               </div>
               <div className="flex space-x-3 pt-4 pb-6">
                 {editingAccount && <button type="button" onClick={deleteAccount} className="px-6 py-4 rounded-2xl bg-rose-500/10 text-rose-500 font-semibold active:scale-[0.98] transition-all">Excluir</button>}
@@ -1251,7 +1620,7 @@ export default function Home() {
             <div className="flex-1 overflow-y-auto px-5 space-y-3 pb-2 scrollbar-hide">
               <div className="flex flex-col items-center py-2 cursor-pointer" onClick={() => setActiveInput('amount')}>
                 <div className={`flex items-baseline space-x-1 pb-1 border-b-2 transition-colors ${activeInput === 'amount' ? themeColorBorderFocus : 'border-transparent'}`}>
-                  <span className="text-2xl text-gray-500">R$</span>
+                  <span className="text-2xl text-gray-500">€</span>
                   <span className={`text-[3.5rem] font-bold tracking-tight transition-colors leading-none ${amount === '0' ? 'text-gray-500' : 'text-white'}`}>{amount}</span>
                 </div>
               </div>
@@ -1344,7 +1713,8 @@ export default function Home() {
                   <input type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 </div>
                 {!isTransfer && (
-                  <button onClick={handleOcrSimulation} disabled={isOcrProcessing} className="flex items-center justify-center space-x-2 bg-gray-900 p-3 rounded-xl border border-gray-800 active:scale-95 transition-all overflow-hidden relative">
+                  <label className="flex items-center justify-center space-x-2 bg-gray-900 p-3 rounded-xl border border-gray-800 active:scale-95 transition-all overflow-hidden relative cursor-pointer">
+                    <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isOcrProcessing} className="hidden" />
                     {isOcrProcessing ? (
                       <div className="flex items-center space-x-2">
                         <svg className="animate-spin w-4 h-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -1353,10 +1723,10 @@ export default function Home() {
                     ) : (
                       <div className="flex items-center space-x-2">
                         <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                        <span className="text-xs font-medium text-blue-400">OCR IA</span>
+                        <span className="text-xs font-medium text-blue-400">{ocrUrl ? 'Imagem Carregada' : 'OCR IA'}</span>
                       </div>
                     )}
-                  </button>
+                  </label>
                 )}
               </div>
 
@@ -1408,8 +1778,13 @@ export default function Home() {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   </button>
                 )}
-                <button onClick={handleSaveTransaction} disabled={amount === '0' && !editingTransactionId} className={`flex-1 h-[3.25rem] rounded-xl flex items-center justify-center font-semibold text-lg tracking-wide transition-all shadow-lg ${amount === '0' && !editingTransactionId ? 'bg-gray-800 text-gray-500 shadow-none' : `${themeColorBg} text-white ${themeColorShadow} active:scale-[0.98]`}`}>
-                  {saveButtonText}
+                <button onClick={handleSaveTransaction} disabled={(amount === '0' && !editingTransactionId) || isSaving} className={`flex-1 h-[3.25rem] rounded-xl flex items-center justify-center font-semibold text-lg tracking-wide transition-all shadow-lg ${(amount === '0' && !editingTransactionId) || isSaving ? 'bg-gray-800 text-gray-500 shadow-none' : `${themeColorBg} text-white ${themeColorShadow} active:scale-[0.98]`}`}>
+                  {isSaving ? (
+                    <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : saveButtonText}
                 </button>
               </div>
               {activeInput === 'amount' && (
@@ -1426,6 +1801,25 @@ export default function Home() {
               )}
             </div>
             <div className={activeInput === 'amount' ? 'h-2' : 'h-6'} /> 
+          </div>
+        </div>
+      )}
+      {/* Lightbox Modal */}
+      {lightboxUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/95 backdrop-blur-xl animate-fade-in" onClick={() => setLightboxUrl(null)} />
+          <div className="relative max-w-full max-h-full animate-zoom-in">
+            <button 
+              onClick={() => setLightboxUrl(null)}
+              className="absolute -top-12 right-0 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <img 
+              src={lightboxUrl} 
+              alt="Comprovativo" 
+              className="max-w-[95vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
+            />
           </div>
         </div>
       )}
