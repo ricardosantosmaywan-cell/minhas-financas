@@ -78,6 +78,7 @@ export default function Home() {
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCatType, setNewCatType] = useState<'expense'|'income'|null>(null);
+  const [newCatName, setNewCatName] = useState('');
   
   const [isSubcategoryFormOpen, setIsSubcategoryFormOpen] = useState(false);
   const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
@@ -788,22 +789,28 @@ export default function Home() {
   const openNewCategoryForm = () => { 
     setEditingCategory(null); 
     setNewCatType(null);
+    setNewCatName('');
     setIsCategoryFormOpen(true); 
   };
   const openEditCategoryForm = (cat: Category) => { 
     setEditingCategory(cat); 
     setNewCatType(cat.type);
+    setNewCatName(cat.name);
     setIsCategoryFormOpen(true); 
   };
 
-  const saveCategory = async (e: React.FormEvent<HTMLFormElement>) => {
+  const saveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const formData = new FormData(e.currentTarget);
-    const name = formData.get('name') as string;
-    const iconColor = newCatType === 'expense' ? 'text-orange-500' : 'text-emerald-500';
-    const iconPath = 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z'; // Tag icon
+    
+    const name = newCatName.trim();
+    if (!name) { alert('Escreve o nome da categoria.'); return; }
+    if (!editingCategory && !newCatType) { alert('Seleciona o tipo: Despesa ou Receita.'); return; }
+    
+    const catType = editingCategory ? (newCatType || editingCategory.type) : newCatType!;
+    const iconColor = catType === 'expense' ? 'text-orange-500' : 'text-emerald-500';
+    const iconPath = 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z';
     
     setIsSaving(true);
     let newId = '';
@@ -812,7 +819,7 @@ export default function Home() {
       if (editingCategory) {
         const { error } = await supabase.from('categories').update({
           name,
-          type: newCatType,
+          type: catType,
           icon_color: iconColor,
           icon_path: iconPath
         }).eq('id', editingCategory.id);
@@ -823,7 +830,7 @@ export default function Home() {
         const { data, error } = await supabase.from('categories').insert({
           user_id: user.id,
           name,
-          type: newCatType,
+          type: catType,
           icon_color: iconColor,
           icon_path: iconPath
         }).select().single();
@@ -1621,7 +1628,7 @@ export default function Home() {
             <form onSubmit={saveCategory} className="space-y-4">
               <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 focus-within:border-blue-500 transition-colors">
                 <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Nome da Categoria</label>
-                <input name="name" type="text" defaultValue={editingCategory?.name || ''} placeholder="Ex: Aluguer, Combustível..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
+                <input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} type="text" placeholder="Ex: Aluguer, Combustível..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
               </div>
 
               {!editingCategory && (
@@ -1659,9 +1666,9 @@ export default function Home() {
                 {editingCategory && <button type="button" onClick={deleteCategory} className="px-6 py-4 rounded-2xl bg-rose-500/10 text-rose-500 font-semibold active:scale-[0.98] transition-all">Excluir</button>}
                 <button 
                   type="submit" 
-                  disabled={isSaving || (!editingCategory && !newCatType)}
+                  disabled={isSaving || !newCatName.trim() || (!editingCategory && !newCatType)}
                   className={`flex-1 py-4 rounded-2xl font-semibold shadow-lg transition-all active:scale-[0.98] ${
-                    isSaving || (!editingCategory && !newCatType) 
+                    isSaving || !newCatName.trim() || (!editingCategory && !newCatType) 
                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
                     : 'bg-blue-600 text-white shadow-blue-500/20'
                   }`}
