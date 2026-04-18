@@ -77,7 +77,7 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [newCatType, setNewCatType] = useState<'expense'|'income'>('expense');
+  const [newCatType, setNewCatType] = useState<'expense'|'income'|null>(null);
   
   const [isSubcategoryFormOpen, setIsSubcategoryFormOpen] = useState(false);
   const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
@@ -785,9 +785,9 @@ export default function Home() {
   };
 
   // --- Categories CRUD ---
-  const openNewCategoryForm = (typeContext: 'expense' | 'income' = 'expense') => { 
+  const openNewCategoryForm = () => { 
     setEditingCategory(null); 
-    setNewCatType(typeContext);
+    setNewCatType(null);
     setIsCategoryFormOpen(true); 
   };
   const openEditCategoryForm = (cat: Category) => { 
@@ -1657,7 +1657,17 @@ export default function Home() {
 
               <div className="flex space-x-3 pt-4 pb-6">
                 {editingCategory && <button type="button" onClick={deleteCategory} className="px-6 py-4 rounded-2xl bg-rose-500/10 text-rose-500 font-semibold active:scale-[0.98] transition-all">Excluir</button>}
-                <button type="submit" className="flex-1 py-4 rounded-2xl bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all">Salvar Categoria</button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving || (!editingCategory && !newCatType)}
+                  className={`flex-1 py-4 rounded-2xl font-semibold shadow-lg transition-all active:scale-[0.98] ${
+                    isSaving || (!editingCategory && !newCatType) 
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+                    : 'bg-blue-600 text-white shadow-blue-500/20'
+                  }`}
+                >
+                  {isSaving ? 'A guardar...' : 'Salvar Categoria'}
+                </button>
               </div>
             </form>
           </div>
