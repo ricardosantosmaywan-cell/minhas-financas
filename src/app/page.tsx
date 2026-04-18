@@ -847,7 +847,8 @@ export default function Home() {
         setSelectedCategoryId(newId);
       }
     } catch (error: any) {
-      console.error('Erro detalhado Supabase:', error);
+      console.error('ERRO CATEGORIA:', JSON.stringify(error));
+      alert('Erro ao salvar categoria: ' + JSON.stringify(error));
       setToastMessage(error.message || 'Erro ao salvar categoria');
     } finally {
       setIsSaving(false);
