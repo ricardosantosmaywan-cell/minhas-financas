@@ -1021,7 +1021,7 @@ export default function Home() {
       {isSidebarOpen && (
         <div className="fixed inset-0 z-[60] flex">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsSidebarOpen(false)} />
-          <div className="relative w-3/4 max-w-sm bg-gray-950 h-full border-r border-gray-800 p-6 flex flex-col animate-slide-right shadow-2xl">
+          <div className="relative w-3/4 max-w-sm bg-gray-950 h-full border-r border-gray-800 p-6 flex flex-col overflow-y-auto scrollbar-hide pb-16 animate-slide-right shadow-2xl">
             <div className="flex items-center justify-between mb-10">
               <div className="flex flex-col mb-2 cursor-pointer" onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}>
                 <div className="w-14 h-14 rounded-full border-2 border-blue-500/30 overflow-hidden mb-3 bg-gray-800 shadow-lg shadow-blue-500/10">
@@ -1064,7 +1064,7 @@ export default function Home() {
                     setToastMessage('A atualizar aplicação...');
                     setTimeout(() => window.location.reload(), 800);
                   }}
-                  className="w-full flex items-center space-x-4 p-4 rounded-2xl text-blue-400 bg-blue-500/5 hover:bg-blue-500/10 transition-colors border border-blue-500/10"
+                  className="w-full flex items-center space-x-4 p-4 rounded-2xl text-blue-400 bg-blue-600/10 hover:bg-blue-600/20 transition-all border border-blue-500/30 shadow-lg shadow-blue-500/5 active:scale-[0.98]"
                 >
                   <svg className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                   <span className="font-bold text-lg">Atualizar App</span>
