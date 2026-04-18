@@ -583,7 +583,11 @@ export default function Home() {
         
       const { error: updateError } = await supabase
         .from('profiles')
-        .upsert({ id: session.user.id, avatar_url: publicUrl });
+        .upsert({ 
+          id: session.user.id, 
+          avatar_url: publicUrl,
+          full_name: userProfile?.full_name || ''
+        });
         
       if (updateError) throw updateError;
       
@@ -608,7 +612,11 @@ export default function Home() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .upsert({ id: session.user.id, full_name: fullName });
+        .upsert({ 
+          id: session.user.id, 
+          full_name: fullName,
+          avatar_url: userProfile?.avatar_url || ''
+        });
         
       if (error) throw error;
       
@@ -1020,7 +1028,7 @@ export default function Home() {
       {isSidebarOpen && (
         <div className="fixed inset-0 z-[60] flex">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsSidebarOpen(false)} />
-          <div className="relative w-3/4 max-w-sm bg-gray-950 h-full border-r border-gray-800 p-6 flex flex-col animate-slide-right shadow-2xl">
+          <div className="relative w-3/4 max-w-sm bg-gray-950 h-[100dvh] border-r border-gray-800 p-6 flex flex-col animate-slide-right shadow-2xl">
             <div className="flex items-center justify-between mb-10">
               <div className="flex flex-col mb-2 cursor-pointer" onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}>
                 <div className="w-14 h-14 rounded-full border-2 border-blue-500/30 overflow-hidden mb-3 bg-gray-800 shadow-lg shadow-blue-500/10">
@@ -1056,7 +1064,7 @@ export default function Home() {
                 </button>
               ))}
               
-              <div className="pt-4 mt-auto border-t border-gray-900/50 space-y-2 pb-8">
+              <div className="pt-4 mt-auto border-t border-gray-900/50 space-y-2 pb-16 px-2">
                 <button 
                   onClick={() => {
                     setIsRefreshing(true);
