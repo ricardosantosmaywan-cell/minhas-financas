@@ -583,8 +583,7 @@ export default function Home() {
         
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', session.user.id);
+        .upsert({ id: session.user.id, avatar_url: publicUrl });
         
       if (updateError) throw updateError;
       
@@ -609,8 +608,7 @@ export default function Home() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: fullName })
-        .eq('id', session.user.id);
+        .upsert({ id: session.user.id, full_name: fullName });
         
       if (error) throw error;
       
@@ -1021,7 +1019,7 @@ export default function Home() {
       {isSidebarOpen && (
         <div className="fixed inset-0 z-[60] flex">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsSidebarOpen(false)} />
-          <div className="relative w-3/4 max-w-sm bg-gray-950 h-full border-r border-gray-800 p-6 flex flex-col overflow-y-auto scrollbar-hide pb-16 animate-slide-right shadow-2xl">
+          <div className="relative w-3/4 max-w-sm bg-gray-950 h-full border-r border-gray-800 p-6 flex flex-col animate-slide-right shadow-2xl">
             <div className="flex items-center justify-between mb-10">
               <div className="flex flex-col mb-2 cursor-pointer" onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}>
                 <div className="w-14 h-14 rounded-full border-2 border-blue-500/30 overflow-hidden mb-3 bg-gray-800 shadow-lg shadow-blue-500/10">
@@ -1037,7 +1035,7 @@ export default function Home() {
               </button>
             </div>
             
-            <nav className="flex flex-col space-y-2 flex-1">
+            <nav className="flex flex-col space-y-2 overflow-y-auto scrollbar-hide pr-2 mb-4">
               {[
                 { id: 'dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', label: 'Dashboard' },
                 { id: 'transactions', icon: 'M4 6h16M4 12h16M4 18h7', label: 'Transações' },
@@ -1057,7 +1055,7 @@ export default function Home() {
                 </button>
               ))}
               
-              <div className="pt-4 mt-2 border-t border-gray-900/50 space-y-2">
+              <div className="pt-4 mt-auto border-t border-gray-900/50 space-y-2 pb-8">
                 <button 
                   onClick={() => {
                     setIsRefreshing(true);
