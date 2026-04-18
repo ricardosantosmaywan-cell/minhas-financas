@@ -152,13 +152,17 @@ export default function Home() {
         setCategories(cats.map(c => ({ id: c.id, name: c.name, type: c.type, iconColor: c.icon_color, iconPath: c.icon_path })));
       }
 
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      if (profile) {
-        setUserProfile(profile);
-      } else {
-        // Initialize profile if not exists (handling first time login)
-        const { data: newProfile } = await supabase.from('profiles').insert({ id: userId, full_name: session?.user?.email?.split('@')[0] || 'Usuário', avatar_url: '' }).select().single();
-        if (newProfile) setUserProfile(newProfile);
+      try {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+        if (profile) {
+          setUserProfile(profile);
+        } else {
+          // Initialize profile if not exists (handling first time login)
+          const { data: newProfile } = await supabase.from('profiles').insert({ id: userId, full_name: session?.user?.email?.split('@')[0] || 'Usuário', avatar_url: '' }).select().single();
+          if (newProfile) setUserProfile(newProfile);
+        }
+      } catch (profileError) {
+        console.warn('Erro ao carregar perfil (tabela pode estar incompleta):', profileError);
       }
       
       const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId);
