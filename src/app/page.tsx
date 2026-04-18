@@ -594,7 +594,7 @@ export default function Home() {
       setUserProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
       setToastMessage('Foto atualizada!');
     } catch (err: any) {
-      console.error(err);
+      console.error("ERRO SUPABASE AVATAR:", err);
       alert('Erro Supabase (Avatar): ' + JSON.stringify(err));
     } finally {
       setTimeout(() => setToastMessage(''), 3000);
@@ -624,7 +624,7 @@ export default function Home() {
       setIsProfileModalOpen(false);
       setToastMessage('Perfil atualizado!');
     } catch (err: any) {
-      console.error(err);
+      console.error("ERRO SUPABASE PERFIL:", err);
       alert('Erro Supabase (Perfil): ' + JSON.stringify(err));
     } finally {
       setIsSaving(false);
