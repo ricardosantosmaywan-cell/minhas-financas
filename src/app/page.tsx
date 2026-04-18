@@ -17,6 +17,12 @@ type Account = {
   isDefault?: boolean;
 };
 
+interface UserProfile {
+  id: string;
+  full_name: string;
+  avatar_url: string;
+}
+
 type Category = {
   id: string;
   name: string;
@@ -62,6 +68,8 @@ export default function Home() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accountName, setAccountName] = useState('');
   const [initialBalance, setInitialBalance] = useState('');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Categories & Subcategories State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -141,6 +149,15 @@ export default function Home() {
         }
       } else {
         setCategories(cats.map(c => ({ id: c.id, name: c.name, type: c.type, iconColor: c.icon_color, iconPath: c.icon_path })));
+      }
+
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (profile) {
+        setUserProfile(profile);
+      } else {
+        // Initialize profile if not exists (handling first time login)
+        const { data: newProfile } = await supabase.from('profiles').insert({ id: userId, full_name: session?.user?.email?.split('@')[0] || 'Usuário', avatar_url: '' }).select().single();
+        if (newProfile) setUserProfile(newProfile);
       }
       
       const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId);
@@ -543,6 +560,70 @@ export default function Home() {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    
+    setToastMessage('A atualizar foto...');
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${session.user.id}_${Math.random()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+        
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+        
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', session.user.id);
+        
+      if (updateError) throw updateError;
+      
+      setUserProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
+      setToastMessage('Foto atualizada!');
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao carregar avatar: ' + err.message);
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!session || !userProfile) return;
+    
+    const formData = new FormData(e.currentTarget);
+    const fullName = formData.get('full_name') as string;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: fullName })
+        .eq('id', session.user.id);
+        
+      if (error) throw error;
+      
+      setUserProfile({ ...userProfile, full_name: fullName });
+      setIsProfileModalOpen(false);
+      setToastMessage('Perfil atualizado!');
+    } catch (err: any) {
+      alert('Erro: ' + err.message);
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setToastMessage(''), 3000);
+    }
+  };
+
   const handleSetDefaultAccount = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const { data: { user } } = await supabase.auth.getUser();
@@ -941,13 +1022,13 @@ export default function Home() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsSidebarOpen(false)} />
           <div className="relative w-3/4 max-w-sm bg-gray-950 h-full border-r border-gray-800 p-6 flex flex-col animate-slide-right shadow-2xl">
             <div className="flex items-center justify-between mb-10">
-              <div className="flex flex-col mb-2">
-                <div className="w-14 h-14 rounded-full border-2 border-gray-700 overflow-hidden mb-3 bg-gray-800">
-                  <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="Avatar" className="w-full h-full object-cover" />
+              <div className="flex flex-col mb-2 cursor-pointer" onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}>
+                <div className="w-14 h-14 rounded-full border-2 border-blue-500/30 overflow-hidden mb-3 bg-gray-800 shadow-lg shadow-blue-500/10">
+                  <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-xl tracking-wide text-white leading-tight">Ricardo</h2>
-                  <p className="text-gray-500 text-xs font-medium mt-0.5">Gestão Financeira</p>
+                  <h2 className="font-bold text-xl tracking-wide text-white leading-tight">{userProfile?.full_name || 'Ricardo'}</h2>
+                  <p className="text-gray-500 text-xs font-medium mt-0.5">{session?.user?.email}</p>
                 </div>
               </div>
               <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 flex items-center justify-center bg-gray-900 rounded-full text-gray-400">
@@ -974,6 +1055,13 @@ export default function Home() {
                   <span className="font-medium text-lg">{item.label}</span>
                 </button>
               ))}
+              <button 
+                onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}
+                className="flex items-center space-x-4 p-4 rounded-2xl text-gray-400 hover:bg-gray-900 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <span className="font-medium text-lg">Meu Perfil</span>
+              </button>
             </nav>
           </div>
         </div>
@@ -983,6 +1071,9 @@ export default function Home() {
       <header className="pt-20 pb-10 px-6 bg-gradient-to-b from-gray-900 to-black rounded-b-[2.5rem] border-b border-gray-800/50 shadow-lg relative z-10 flex flex-col items-center text-center">
         <button onClick={() => setIsSidebarOpen(true)} className="absolute top-14 left-6 p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
           <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
+        <button onClick={() => setIsProfileModalOpen(true)} className="absolute top-14 right-6 w-10 h-10 rounded-full border border-gray-800 overflow-hidden shadow-lg bg-gray-900">
+           <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="User" className="w-full h-full object-cover" />
         </button>
         {(() => {
           const defaultAccount = accounts.find(a => a.isDefault) || accounts[0] || { name: 'Sem Conta', balance: 0 };
@@ -1804,6 +1895,50 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* Profile Settings Modal */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsProfileModalOpen(false)} />
+          <div className="relative bg-gray-950 w-full rounded-t-[2.5rem] p-8 animate-slide-up border-t border-gray-800">
+            <div className="w-12 h-1.5 bg-gray-800 rounded-full mx-auto mb-8" />
+            
+            <h2 className="text-2xl font-bold text-white mb-6">Configurações do Perfil</h2>
+            
+            <div className="flex flex-col items-center mb-8">
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-full border-4 border-blue-600/20 overflow-hidden bg-gray-900 shadow-2xl">
+                  <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
+                </div>
+                <label className="absolute bottom-0 right-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center cursor-pointer border-2 border-gray-950 hover:bg-blue-500 transition-colors shadow-lg">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <input type="file" className="hidden" accept="image/*" capture="user" onChange={handleAvatarUpload} />
+                </label>
+              </div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-3">Tocar para alterar foto</p>
+            </div>
+
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+              <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Nome Completo</label>
+                <input name="full_name" type="text" defaultValue={userProfile?.full_name || ''} className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
+              </div>
+              
+              <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800">
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Email (Não editável)</label>
+                <p className="text-gray-400 font-medium">{session?.user?.email}</p>
+              </div>
+
+              <div className="flex space-x-3 pt-4 pb-6">
+                <button type="button" onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 rounded-2xl bg-gray-900 text-white font-semibold active:scale-95 transition-all border border-gray-800">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="flex-[2] py-4 rounded-2xl bg-blue-600 text-white font-bold active:scale-95 transition-all shadow-lg shadow-blue-600/20">
+                  {isSaving ? 'A guardar...' : 'Guardar Perfil'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Lightbox Modal */}
       {lightboxUrl && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
