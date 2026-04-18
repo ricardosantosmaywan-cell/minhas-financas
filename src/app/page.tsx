@@ -70,6 +70,7 @@ export default function Home() {
   const [initialBalance, setInitialBalance] = useState('');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Categories & Subcategories State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -1055,13 +1056,28 @@ export default function Home() {
                   <span className="font-medium text-lg">{item.label}</span>
                 </button>
               ))}
-              <button 
-                onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}
-                className="flex items-center space-x-4 p-4 rounded-2xl text-gray-400 hover:bg-gray-900 hover:text-white transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                <span className="font-medium text-lg">Meu Perfil</span>
-              </button>
+              
+              <div className="pt-4 mt-2 border-t border-gray-900/50 space-y-2">
+                <button 
+                  onClick={() => {
+                    setIsRefreshing(true);
+                    setToastMessage('A atualizar aplicação...');
+                    setTimeout(() => window.location.reload(), 800);
+                  }}
+                  className="w-full flex items-center space-x-4 p-4 rounded-2xl text-blue-400 bg-blue-500/5 hover:bg-blue-500/10 transition-colors border border-blue-500/10"
+                >
+                  <svg className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  <span className="font-bold text-lg">Atualizar App</span>
+                </button>
+
+                <button 
+                  onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}
+                  className="w-full flex items-center space-x-4 p-4 rounded-2xl text-gray-400 hover:bg-gray-900 hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  <span className="font-medium text-lg">Meu Perfil</span>
+                </button>
+              </div>
             </nav>
           </div>
         </div>
