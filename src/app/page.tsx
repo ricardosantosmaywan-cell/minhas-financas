@@ -118,17 +118,17 @@ export default function Home() {
         await supabase.from('accounts').insert({
           user_id: userId,
           name: 'Minha Carteira',
-          balance: 0
+          current_balance: 0
         });
         // Refetch accounts
         const { data: newAccs } = await supabase.from('accounts').select('*').eq('user_id', userId);
         if (newAccs && newAccs.length > 0) {
-          setAccounts(newAccs.map(a => ({ id: a.id, name: a.name, balance: a.balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
+          setAccounts(newAccs.map(a => ({ id: a.id, name: a.name, balance: a.current_balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
           const def = newAccs.find(a => a.is_default) || newAccs[0];
           setSelectedAccountId(def.id);
         }
       } else {
-        setAccounts(accs.map(a => ({ id: a.id, name: a.name, balance: a.balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
+        setAccounts(accs.map(a => ({ id: a.id, name: a.name, balance: a.current_balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
         const def = accs.find(a => a.is_default) || accs[0];
         setSelectedAccountId(def.id);
       }
@@ -371,7 +371,7 @@ export default function Home() {
         const acc = accounts.find(a => a.id === selectedAccountId);
         if (acc) {
           const newBalance = acc.balance + diff;
-          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+          const { error: accErr } = await supabase.from('accounts').update({ current_balance: newBalance }).eq('id', selectedAccountId);
           if (accErr) {
             console.log('Erro ao atualizar saldo:', accErr);
           }
@@ -399,7 +399,7 @@ export default function Home() {
           
           const acc = accounts.find(a => a.id === oldTx.accountId);
           if (acc) {
-            await supabase.from('accounts').update({ balance: acc.balance + diff }).eq('id', acc.id);
+            await supabase.from('accounts').update({ current_balance: acc.balance + diff }).eq('id', acc.id);
           }
           fetchData(session.user.id);
           setToastMessage('Transação excluída com sucesso');
@@ -745,7 +745,7 @@ export default function Home() {
     setIsSaving(true);
     try {
       if (editingAccount) {
-        const payload = { name, balance };
+        const payload = { name, current_balance: balance };
         console.log('Tentando atualizar conta:', payload);
         const { error } = await supabase.from('accounts').update(payload).eq('id', editingAccount.id);
         if (error) {
@@ -757,7 +757,7 @@ export default function Home() {
         const payload = {
           user_id: user.id,
           name: name,
-          balance: balance
+          current_balance: balance
         };
         console.log('Tentando salvar conta:', payload);
         const { error } = await supabase.from('accounts').insert(payload);
