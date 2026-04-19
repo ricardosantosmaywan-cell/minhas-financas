@@ -162,11 +162,11 @@ export default function Home() {
         console.warn('Erro ao carregar perfil (tabela pode estar incompleta):', profileError);
       }
       
-      const { data: txs, error: txError } = await supabase.from('transactions').select('*, accounts(name), categories(name)').eq('user_id', userId);
+      const { data: txs, error: txError } = await supabase.from('transactions').select('*, accounts(name)').eq('user_id', userId);
       if (txError) console.error("Error fetching transactions with join:", txError);
       const txList = txs || [];
       if (txList) {
-        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: categories.find(c => c.name === t.category)?.id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
+        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: t.category_id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
       } else {
         setTransactions([]);
       }
