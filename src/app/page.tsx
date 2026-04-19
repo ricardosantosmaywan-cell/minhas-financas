@@ -174,8 +174,12 @@ export default function Home() {
 
       if (accs && txList) {
         const accountsWithCalculatedBalance = accs.map(acc => {
-          console.log('Saldo da Conta Andaimes no Banco:', acc.current_balance);
-          return { id: acc.id, name: acc.name, balance: acc.current_balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: acc.is_default };
+          const accTxs = txList.filter((t: any) => t.account_id === acc.id);
+          const income = accTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+          const expense = accTxs.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+          const calculatedBalance = income - expense;
+          console.log(`Saldo da Conta ${acc.name}:`, calculatedBalance, '(Entradas:', income, '- Saídas:', expense, ')');
+          return { id: acc.id, name: acc.name, balance: calculatedBalance, income, expense, iconColor: 'bg-blue-600', isDefault: acc.is_default };
         });
         setAccounts(accountsWithCalculatedBalance);
         const def = accountsWithCalculatedBalance.find((a: Account) => a.isDefault) || accountsWithCalculatedBalance[0];
