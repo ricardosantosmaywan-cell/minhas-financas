@@ -43,6 +43,7 @@ type TransactionRecord = {
   amount: number;
   date: string;
   accountId?: string;
+  accountName?: string;
   categoryId?: string;
   description: string;
   hasReminder: boolean;
@@ -168,9 +169,10 @@ export default function Home() {
         console.warn('Erro ao carregar perfil (tabela pode estar incompleta):', profileError);
       }
       
-      const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId);
+      const { data: txs, error: txError } = await supabase.from('transactions').select('*, accounts(name)').eq('user_id', userId);
+      if (txError) console.error("Error fetching transactions with join:", txError);
       if (txs) {
-        setTransactions(txs.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, categoryId: categories.find(c => c.name === t.category)?.id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
+        setTransactions(txs.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: categories.find(c => c.name === t.category)?.id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
       } else {
         setTransactions([]);
       }
@@ -365,7 +367,16 @@ export default function Home() {
         setToastMessage('Transação salva com sucesso');
       }
       
-      // O saldo da conta é agora atualizado automaticamente por um trigger no Supabase
+      if (diff !== 0 && selectedAccountId) {
+        const acc = accounts.find(a => a.id === selectedAccountId);
+        if (acc) {
+          const newBalance = acc.balance + diff;
+          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+          if (accErr) {
+            console.log('Erro ao atualizar saldo:', accErr);
+          }
+        }
+      }
       
       await fetchData(user.id);
       setTimeout(() => setToastMessage(''), 3000);
@@ -1225,11 +1236,13 @@ export default function Home() {
                                 </div>
                                 <div>
                                   <p className="text-white font-medium">{t.description}</p>
-                                  <p className={t.isCritical ? 'text-rose-400 font-bold text-xs' : 'text-yellow-500/80 text-xs'}>{t.date}</p>
+                                  <p className={t.isCritical ? 'text-rose-400 font-bold text-xs' : 'text-yellow-500/80 text-xs'}>
+                                    {t.accountName ? <span className="font-semibold">{t.accountName} • </span> : ''}{t.date}
+                                  </p>
                                 </div>
                               </div>
-                              <p className={`font-semibold ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {cat.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
+                              <p className={`font-semibold ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                               </p>
                             </div>
                           );
@@ -1249,11 +1262,13 @@ export default function Home() {
                               </div>
                               <div>
                                 <p className="text-white font-medium">{t.description}</p>
-                                <p className="text-gray-500 text-xs">{t.date}</p>
+                                <p className="text-gray-500 text-xs">
+                                  {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName} • </span> : ''}{t.date}
+                                </p>
                               </div>
                             </div>
-                            <p className={`font-semibold ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {cat.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
+                            <p className={`font-semibold ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                             </p>
                           </div>
                         );
@@ -1330,11 +1345,13 @@ export default function Home() {
                             </div>
                             <div>
                               <p className="text-white font-medium">{t.description}</p>
-                              <p className="text-gray-500 text-xs">{t.date}</p>
+                              <p className="text-gray-500 text-xs">
+                                {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName} • </span> : ''}{t.date}
+                              </p>
                             </div>
                           </div>
-                          <p className={`font-semibold ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {cat.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
+                          <p className={`font-semibold ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                           </p>
                         </div>
                       );
@@ -1363,11 +1380,13 @@ export default function Home() {
                          </div>
                          <div>
                            <p className="text-white font-medium">{t.description}</p>
-                           <p className="text-yellow-500/80 text-xs">Vence: {t.date}</p>
+                           <p className="text-yellow-500/80 text-xs">
+                             {t.accountName ? <span className="font-semibold">{t.accountName} • </span> : ''}Vence: {t.date}
+                           </p>
                          </div>
                        </div>
-                       <p className={`font-bold ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                         {formatCurrency(t.amount)}
+                       <p className={`font-bold ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                         {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                        </p>
                      </div>
                    );
@@ -1564,7 +1583,9 @@ export default function Home() {
                                 </div>
                                 <div className="min-w-0 cursor-pointer" onClick={() => handleOpenEditForm(t)}>
                                   <p className="text-white font-medium text-sm truncate">{t.description}</p>
-                                  <p className="text-gray-500 text-[10px]">{formatDateDisplay(t.date)}</p>
+                                  <p className="text-gray-500 text-[10px]">
+                                    {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName} • </span> : ''}{formatDateDisplay(t.date)}
+                                  </p>
                                 </div>
                               </div>
 
@@ -1591,8 +1612,8 @@ export default function Home() {
                                   <span className="text-[8px] text-gray-500 uppercase mt-1 tracking-tighter">Anexo</span>
                                 </div>
 
-                                <p className={`font-semibold text-sm whitespace-nowrap ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                  {cat.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
+                                <p className={`font-semibold text-sm whitespace-nowrap ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                                 </p>
                               </div>
                             </div>
