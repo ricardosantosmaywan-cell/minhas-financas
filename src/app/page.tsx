@@ -1150,7 +1150,7 @@ export default function Home() {
               <p className="text-gray-400 text-sm font-medium mb-2 flex items-center justify-center">
                 {currentView === 'accounts' ? 'Saldo Global' : 
                  currentView === 'transactions' ? 'Histórico Geral' :
-                 currentView === 'reports' ? 'Balanço do Período' : 
+                 currentView === 'reports' ? (selectedAccountId ? accounts.find(a => a.id === selectedAccountId)?.name || 'Balanço do Período' : 'Balanço do Período') : 
                  currentView === 'categories' ? 'Minhas Categorias' :
                  currentView === 'alerts' ? 'Notificações Ativas' : 
                  <>Saldo Atual <span className="mx-2 text-gray-700">&bull;</span> <span className="text-white">{defaultAccount.name}</span></>}
@@ -1160,7 +1160,7 @@ export default function Home() {
                  currentView === 'alerts' ? transactions.filter(t => t.hasReminder).length : 
                  currentView === 'transactions' ? transactions.length :
                  currentView === 'accounts' ? formatCurrency(totalBalance) :
-                 currentView === 'reports' ? formatCurrency(totalBalance) :
+                 currentView === 'reports' ? formatCurrency(selectedAccountId ? accounts.find(a => a.id === selectedAccountId)?.balance || 0 : totalBalance) :
                  formatCurrency(defaultAccount.balance)}
               </h1>
             </div>
