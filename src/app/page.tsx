@@ -71,6 +71,7 @@ export default function Home() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [profileName, setProfileName] = useState('');
 
   // Categories & Subcategories State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -81,6 +82,7 @@ export default function Home() {
   const [newCatName, setNewCatName] = useState('');
   
   const [isSubcategoryFormOpen, setIsSubcategoryFormOpen] = useState(false);
+  const [subcatName, setSubcatName] = useState('');
   const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
   const [subcatParentId, setSubcatParentId] = useState<string>('');
 
@@ -606,12 +608,12 @@ export default function Home() {
     }
   };
 
-  const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session) return;
     
-    const formData = new FormData(e.currentTarget);
-    const fullName = formData.get('full_name') as string;
+    const fullName = profileName.trim();
+    if (!fullName) { alert('Escreve o teu nome.'); return; }
     
     setIsSaving(true);
     try {
@@ -875,18 +877,20 @@ export default function Home() {
   const openNewSubcategoryForm = (catId: string) => {
     setEditingSubcategory(null);
     setSubcatParentId(catId);
+    setSubcatName('');
     setIsSubcategoryFormOpen(true);
   };
   const openEditSubcategoryForm = (sub: Subcategory) => {
     setEditingSubcategory(sub);
     setSubcatParentId(sub.categoryId);
+    setSubcatName(sub.name);
     setIsSubcategoryFormOpen(true);
   };
 
-  const saveSubcategory = (e: React.FormEvent<HTMLFormElement>) => {
+  const saveSubcategory = (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const name = formData.get('name') as string;
+    const name = subcatName.trim();
+    if (!name) return;
 
     let newId = Date.now().toString();
     if (editingSubcategory) {
@@ -1043,7 +1047,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsSidebarOpen(false)} />
           <div className="relative w-3/4 max-w-sm bg-gray-950 h-[100dvh] border-r border-gray-800 p-6 flex flex-col animate-slide-right shadow-2xl">
             <div className="flex items-center justify-between mb-10">
-              <div className="flex flex-col mb-2 cursor-pointer" onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}>
+              <div className="flex flex-col mb-2 cursor-pointer" onClick={() => { setIsProfileModalOpen(true); setProfileName(userProfile?.full_name || ''); setIsSidebarOpen(false); }}>
                 <div className="w-14 h-14 rounded-full border-2 border-blue-500/30 overflow-hidden mb-3 bg-gray-800 shadow-lg shadow-blue-500/10">
                   <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
@@ -1091,7 +1095,7 @@ export default function Home() {
                 </button>
 
                 <button 
-                  onClick={() => { setIsProfileModalOpen(true); setIsSidebarOpen(false); }}
+                  onClick={() => { setIsProfileModalOpen(true); setProfileName(userProfile?.full_name || ''); setIsSidebarOpen(false); }}
                   className="w-full flex items-center space-x-4 p-4 rounded-2xl text-gray-400 hover:bg-gray-900 hover:text-white transition-colors"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -1108,7 +1112,7 @@ export default function Home() {
         <button onClick={() => setIsSidebarOpen(true)} className="absolute top-14 left-6 p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
           <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
-        <button onClick={() => setIsProfileModalOpen(true)} className="absolute top-14 right-6 w-10 h-10 rounded-full border border-gray-800 overflow-hidden shadow-lg bg-gray-900">
+        <button onClick={() => { setIsProfileModalOpen(true); setProfileName(userProfile?.full_name || ''); }} className="absolute top-14 right-6 w-10 h-10 rounded-full border border-gray-800 overflow-hidden shadow-lg bg-gray-900">
            <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="User" className="w-full h-full object-cover" />
         </button>
         {(() => {
@@ -1694,7 +1698,7 @@ export default function Home() {
             <form onSubmit={saveSubcategory} className="space-y-4">
               <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 focus-within:border-blue-500 transition-colors">
                 <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Nome da Subcategoria</label>
-                <input name="name" type="text" defaultValue={editingSubcategory?.name || ''} placeholder="Ex: Luz, Água, Internet..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
+                <input value={subcatName} onChange={(e) => setSubcatName(e.target.value)} type="text" placeholder="Ex: Luz, Água, Internet..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
               </div>
 
               <div className="flex space-x-3 pt-4 pb-6">
@@ -1966,7 +1970,7 @@ export default function Home() {
             <form onSubmit={handleUpdateProfile} className="space-y-6">
               <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 focus-within:border-blue-500 transition-colors">
                 <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Nome Completo</label>
-                <input name="full_name" type="text" defaultValue={userProfile?.full_name || ''} className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
+                <input value={profileName} onChange={(e) => setProfileName(e.target.value)} type="text" placeholder="O teu nome..." className="w-full bg-transparent text-white font-medium outline-none text-lg" required />
               </div>
               
               <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800">
