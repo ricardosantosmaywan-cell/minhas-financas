@@ -162,7 +162,7 @@ export default function Home() {
         console.warn('Erro ao carregar perfil (tabela pode estar incompleta):', profileError);
       }
       
-      const { data: txs, error: txError } = await supabase.from('transactions').select('*, accounts(name)').eq('user_id', userId);
+      const { data: txs, error: txError } = await supabase.from('transactions').select('*, accounts(name), categories(name)').eq('user_id', userId);
       if (txError) console.error("Error fetching transactions with join:", txError);
       const txList = txs || [];
       if (txList) {
@@ -1572,6 +1572,7 @@ export default function Home() {
                                 <div className="min-w-0 cursor-pointer" onClick={() => handleOpenEditForm(t)}>
                                   <p className="text-white font-medium text-sm truncate">{t.description}</p>
                                   <p className="text-gray-500 text-[10px]">
+                                    {cat.name && <span className="font-semibold text-blue-400">{cat.name} • </span>}
                                     {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName} • </span> : ''}{formatDateDisplay(t.date)}
                                   </p>
                                 </div>
