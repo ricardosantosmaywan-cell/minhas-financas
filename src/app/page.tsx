@@ -45,6 +45,7 @@ type TransactionRecord = {
   accountId?: string;
   accountName?: string;
   categoryId?: string;
+  subcategoryId?: string;
   description: string;
   hasReminder: boolean;
   reminderTime?: string;
@@ -166,7 +167,7 @@ export default function Home() {
       if (txError) console.error("Error fetching transactions with join:", txError);
       const txList = txs || [];
       if (txList) {
-        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: t.category_id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
+        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: t.category_id || '', subcategoryId: t.subcategory_id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
       } else {
         setTransactions([]);
       }
@@ -335,6 +336,8 @@ export default function Home() {
           date: transactionDate,
           account_id: selectedAccountId,
           category: categoryName,
+          category_id: selectedCategoryId,
+          subcategory_id: selectedSubcategoryId || null,
           description,
           ocr_url: ocrUrl || null,
         };
@@ -357,6 +360,8 @@ export default function Home() {
           date: transactionDate,
           account_id: selectedAccountId,
           category: categoryName,
+          category_id: selectedCategoryId,
+          subcategory_id: selectedSubcategoryId || null,
           description,
           ocr_url: ocrUrl || null,
         };
@@ -1572,8 +1577,9 @@ export default function Home() {
                                 <div className="min-w-0 cursor-pointer" onClick={() => handleOpenEditForm(t)}>
                                   <p className="text-white font-medium text-sm truncate">{t.description}</p>
                                   <p className="text-gray-500 text-[10px]">
-                                    {cat.name && <span className="font-semibold text-blue-400">{cat.name} • </span>}
-                                    {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName} • </span> : ''}{formatDateDisplay(t.date)}
+                                    {cat.name && <span className="font-semibold text-blue-400">{cat.name}</span>}
+                                    {t.subcategoryId && subcategories.find(s => s.id === t.subcategoryId)?.name && <span className="font-semibold text-purple-400"> • {subcategories.find(s => s.id === t.subcategoryId)?.name}</span>}
+                                    {cat.name || t.subcategoryId ? '' : <span className="font-semibold text-gray-400">{t.accountName}</span>}{ (cat.name || t.subcategoryId) && t.accountName ? <span className="text-gray-600"> • </span> : ''}{formatDateDisplay(t.date)}
                                   </p>
                                 </div>
                               </div>
@@ -1870,13 +1876,20 @@ export default function Home() {
                   {activeCategorySubcategories.length > 0 || selectedCategoryId ? (
                     <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide px-1">
                       {activeCategorySubcategories.map(sub => (
-                        <button 
-                          key={sub.id} 
-                          onClick={() => setSelectedSubcategoryId(sub.id)}
-                          className={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${selectedSubcategoryId === sub.id ? themeColorBg + ' text-white' : 'bg-gray-900 border border-gray-800 text-gray-400 active:scale-95'}`}
-                        >
-                          {sub.name}
-                        </button>
+                        <div key={sub.id} className="flex items-center space-x-1">
+                          <button 
+                            onClick={() => setSelectedSubcategoryId(sub.id)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${selectedSubcategoryId === sub.id ? themeColorBg + ' text-white' : 'bg-gray-900 border border-gray-800 text-gray-400 active:scale-95'}`}
+                          >
+                            {sub.name}
+                          </button>
+                          <button 
+                            onClick={() => deleteSubcategoryById(sub.id)}
+                            className="text-gray-600 hover:text-rose-500 active:scale-90 transition-all"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
                       ))}
                       <button onClick={() => openNewSubcategoryForm(selectedCategoryId)} className="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border border-dashed border-gray-700 text-blue-400 bg-gray-900/50 hover:bg-gray-900 active:scale-95 transition-all">
                         + Nova Subcategoria
