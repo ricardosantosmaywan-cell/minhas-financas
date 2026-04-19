@@ -1531,7 +1531,8 @@ export default function Home() {
 
               const totalIn = filteredTxs.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
               const totalOut = filteredTxs.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
-              const balance = totalIn - totalOut;
+              const selectedAcc = reportsAccount !== 'all' ? accounts.find(a => a.id === reportsAccount) : null;
+              const balance = selectedAcc ? selectedAcc.balance : accounts.reduce((acc, a) => acc + a.balance, 0);
 
               return (
                 <>
@@ -1547,7 +1548,7 @@ export default function Home() {
                     </div>
                     <div className="w-px h-8 bg-gray-800"></div>
                     <div className="text-center">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Balanço</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saldo Atual</p>
                       <p className={`font-bold ${balance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>{formatCurrency(balance)}</p>
                     </div>
                   </div>
