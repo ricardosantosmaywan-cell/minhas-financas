@@ -365,18 +365,7 @@ export default function Home() {
         setToastMessage('Transação salva com sucesso');
       }
       
-      if (diff !== 0 && selectedAccountId) {
-        const acc = accounts.find(a => a.id === selectedAccountId);
-        if (acc) {
-          const newBalance = acc.balance + diff;
-          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
-          if (accErr) {
-            console.log('Erro ao atualizar saldo:', accErr);
-            alert('Erro saldo: ' + accErr.message);
-            throw accErr;
-          }
-        }
-      }
+      // O saldo da conta é agora atualizado automaticamente por um trigger no Supabase
       
       await fetchData(user.id);
       setTimeout(() => setToastMessage(''), 3000);
