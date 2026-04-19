@@ -120,17 +120,11 @@ export default function Home() {
           name: 'Minha Carteira',
           current_balance: 0
         });
-        // Refetch accounts
         const { data: newAccs } = await supabase.from('accounts').select('*').eq('user_id', userId);
         if (newAccs && newAccs.length > 0) {
-          setAccounts(newAccs.map(a => ({ id: a.id, name: a.name, balance: a.current_balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
-          const def = newAccs.find(a => a.is_default) || newAccs[0];
+          const def = newAccs.find((a: any) => a.is_default) || newAccs[0];
           setSelectedAccountId(def.id);
         }
-      } else {
-        setAccounts(accs.map(a => ({ id: a.id, name: a.name, balance: a.current_balance || 0, income: 0, expense: 0, iconColor: 'bg-blue-600', isDefault: a.is_default })));
-        const def = accs.find(a => a.is_default) || accs[0];
-        setSelectedAccountId(def.id);
       }
       
       const { data: cats, error: catsError } = await supabase.from('categories').select('*').eq('user_id', userId);
@@ -139,7 +133,6 @@ export default function Home() {
       }
       
       if (!cats || cats.length === 0) {
-        // Se a tabela existir mas estiver vazia, tentamos criar padrões. Se der 404, falhará silenciosamente.
         try {
           await supabase.from('categories').insert([
             { user_id: userId, name: 'Alimentação', type: 'expense', icon_color: 'text-orange-500', icon_path: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' },
@@ -171,10 +164,24 @@ export default function Home() {
       
       const { data: txs, error: txError } = await supabase.from('transactions').select('*, accounts(name)').eq('user_id', userId);
       if (txError) console.error("Error fetching transactions with join:", txError);
-      if (txs) {
-        setTransactions(txs.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: categories.find(c => c.name === t.category)?.id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
+      const txList = txs || [];
+      if (txList) {
+        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: categories.find(c => c.name === t.category)?.id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
       } else {
         setTransactions([]);
+      }
+
+      if (accs && txList) {
+        const accountsWithCalculatedBalance = accs.map(acc => {
+          const accTxs = txList.filter((t: any) => t.account_id === acc.id);
+          const income = accTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+          const expense = accTxs.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+          const calculatedBalance = (acc.current_balance || 0) + income - expense;
+          return { id: acc.id, name: acc.name, balance: calculatedBalance, income, expense, iconColor: 'bg-blue-600', isDefault: acc.is_default };
+        });
+        setAccounts(accountsWithCalculatedBalance);
+        const def = accountsWithCalculatedBalance.find((a: Account) => a.isDefault) || accountsWithCalculatedBalance[0];
+        if (def) setSelectedAccountId(def.id);
       }
 
       try {
@@ -367,17 +374,6 @@ export default function Home() {
         setToastMessage('Transação salva com sucesso');
       }
       
-      if (diff !== 0 && selectedAccountId) {
-        const acc = accounts.find(a => a.id === selectedAccountId);
-        if (acc) {
-          const newBalance = acc.balance + diff;
-          const { error: accErr } = await supabase.from('accounts').update({ current_balance: newBalance }).eq('id', selectedAccountId);
-          if (accErr) {
-            console.log('Erro ao atualizar saldo:', accErr);
-          }
-        }
-      }
-      
       await fetchData(user.id);
       setTimeout(() => setToastMessage(''), 3000);
       handleCloseForm();
@@ -394,13 +390,7 @@ export default function Home() {
       try {
         const oldTx = transactions.find(t => t.id === editingTransactionId);
         if (oldTx) {
-          const diff = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
           await supabase.from('transactions').delete().eq('id', editingTransactionId);
-          
-          const acc = accounts.find(a => a.id === oldTx.accountId);
-          if (acc) {
-            await supabase.from('accounts').update({ current_balance: acc.balance + diff }).eq('id', acc.id);
-          }
           fetchData(session.user.id);
           setToastMessage('Transação excluída com sucesso');
         }
@@ -1075,10 +1065,9 @@ export default function Home() {
           <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center mr-3">
             <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
           </div>
-<div>
-            <p className="text-gray-500 text-xs">
-              {t.accountName ? <span className="font-semibold text-gray-400">Conta: {t.accountName} • </span> : ''}{t.date}
-            </p>
+          <div>
+            <p className="text-yellow-500 font-bold text-sm">Aviso</p>
+            <p className="text-white text-xs mt-0.5">{toastMessage}</p>
           </div>
         </div>
       )}
@@ -1460,7 +1449,7 @@ export default function Home() {
               ))}
             </div>
             
-            <button onClick={() => openNewCategoryForm('expense')} className="w-full mt-4 py-4 border-2 border-dashed border-gray-800 rounded-[1.5rem] flex items-center justify-center space-x-2 text-gray-500 hover:text-white hover:border-gray-600 transition-colors">
+            <button onClick={openNewCategoryForm} className="w-full mt-4 py-4 border-2 border-dashed border-gray-800 rounded-[1.5rem] flex items-center justify-center space-x-2 text-gray-500 hover:text-white hover:border-gray-600 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
               <span className="font-medium">Criar Nova Categoria</span>
             </button>
@@ -1850,7 +1839,10 @@ export default function Home() {
                         className="bg-transparent text-sm font-medium text-white outline-none appearance-none w-full cursor-pointer"
                         value={selectedCategoryId}
                         onChange={(e) => {
-                          if (e.target.value === 'new') { openNewCategoryForm(transactionType as 'expense' | 'income'); }
+                          if (e.target.value === 'new') { 
+                            setNewCatType(transactionType as 'expense' | 'income');
+                            openNewCategoryForm(); 
+                          }
                           else { 
                             setSelectedCategoryId(e.target.value); 
                             const subs = subcategories.filter(s => s.categoryId === e.target.value);
