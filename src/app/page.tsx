@@ -1148,7 +1148,7 @@ export default function Home() {
           return (
             <div className="mt-2 flex flex-col items-center">
               <p className="text-gray-400 text-sm font-medium mb-2 flex items-center justify-center">
-                {currentView === 'accounts' ? 'Saldo Global' : 
+                {currentView === 'accounts' ? defaultAccount.name : 
                  currentView === 'transactions' ? 'Histórico Geral' :
                  currentView === 'reports' ? (selectedAccountId ? accounts.find(a => a.id === selectedAccountId)?.name || 'Balanço do Período' : 'Balanço do Período') : 
                  currentView === 'categories' ? 'Minhas Categorias' :
@@ -1159,7 +1159,7 @@ export default function Home() {
                 {currentView === 'categories' ? categories.length : 
                  currentView === 'alerts' ? transactions.filter(t => t.hasReminder).length : 
                  currentView === 'transactions' ? transactions.length :
-                 currentView === 'accounts' ? formatCurrency(totalBalance) :
+                 currentView === 'accounts' ? formatCurrency(defaultAccount.balance) :
                  currentView === 'reports' ? formatCurrency(selectedAccountId ? accounts.find(a => a.id === selectedAccountId)?.balance || 0 : totalBalance) :
                  formatCurrency(defaultAccount.balance)}
               </h1>
