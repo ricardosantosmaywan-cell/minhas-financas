@@ -174,6 +174,13 @@ export default function Home() {
       } else {
         setTransactions([]);
       }
+
+      try {
+        const { data: subs } = await supabase.from('subcategories').select('*').eq('user_id', userId);
+        if (subs) setSubcategories(subs.map(s => ({ id: s.id, categoryId: s.category_id, name: s.name })));
+      } catch (subErr) {
+        console.warn('Erro ao carregar subcategorias:', subErr);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -887,29 +894,63 @@ export default function Home() {
     setIsSubcategoryFormOpen(true);
   };
 
-  const saveSubcategory = (e: React.FormEvent) => {
+  const saveSubcategory = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = subcatName.trim();
-    if (!name) return;
+    if (!name || !session) return;
 
-    let newId = Date.now().toString();
-    if (editingSubcategory) {
-      setSubcategories(prev => prev.map(s => s.id === editingSubcategory.id ? { ...s, name } : s));
-      newId = editingSubcategory.id;
-    } else {
-      setSubcategories(prev => [...prev, { id: newId, categoryId: subcatParentId, name }]);
-    }
-
-    setIsSubcategoryFormOpen(false);
-
-    if (isFormOpen) {
-      setSelectedSubcategoryId(newId);
+    setIsSaving(true);
+    try {
+      if (editingSubcategory) {
+        const { error } = await supabase.from('subcategories').update({ name }).eq('id', editingSubcategory.id);
+        if (error) throw error;
+        setToastMessage('Subcategoria atualizada!');
+      } else {
+        const { error } = await supabase.from('subcategories').insert({
+          user_id: session.user.id,
+          category_id: subcatParentId,
+          name
+        });
+        if (error) throw error;
+        setToastMessage('Subcategoria criada!');
+      }
+      await fetchData(session.user.id);
+      setIsSubcategoryFormOpen(false);
+    } catch (error: any) {
+      console.error('ERRO SUBCATEGORIA:', error);
+      alert('Erro: ' + JSON.stringify(error));
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setToastMessage(''), 3000);
     }
   };
-  const deleteSubcategory = () => {
-    if (editingSubcategory) {
-      setSubcategories(prev => prev.filter(s => s.id !== editingSubcategory.id));
+
+  const deleteSubcategory = async () => {
+    if (!editingSubcategory || !session) return;
+    try {
+      const { error } = await supabase.from('subcategories').delete().eq('id', editingSubcategory.id);
+      if (error) throw error;
+      await fetchData(session.user.id);
       setIsSubcategoryFormOpen(false);
+      setToastMessage('Subcategoria eliminada!');
+    } catch (error: any) {
+      alert('Erro ao eliminar: ' + JSON.stringify(error));
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
+    }
+  };
+
+  const deleteSubcategoryById = async (id: string) => {
+    if (!session) return;
+    try {
+      const { error } = await supabase.from('subcategories').delete().eq('id', id);
+      if (error) throw error;
+      await fetchData(session.user.id);
+      setToastMessage('Subcategoria eliminada!');
+    } catch (error: any) {
+      alert('Erro ao eliminar: ' + JSON.stringify(error));
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
     }
   };
 
@@ -1658,9 +1699,14 @@ export default function Home() {
                       subcategories.filter(s => s.categoryId === editingCategory.id).map(sub => (
                         <div key={sub.id} className="flex justify-between items-center bg-gray-900 p-3 rounded-xl border border-gray-800">
                           <span className="text-white text-sm font-medium">{sub.name}</span>
-                          <button type="button" onClick={() => openEditSubcategoryForm(sub)} className="text-gray-500 hover:text-white">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <button type="button" onClick={() => openEditSubcategoryForm(sub)} className="text-gray-500 hover:text-white">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            </button>
+                            <button type="button" onClick={() => deleteSubcategoryById(sub.id)} className="text-rose-500 hover:text-rose-400 active:scale-90 transition-all">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}
