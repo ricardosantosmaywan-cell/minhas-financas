@@ -1210,8 +1210,8 @@ export default function Home() {
 
             <div className="space-y-6">
               {(() => {
-                const urgent = transactions.filter(t => t.hasReminder);
-                const recent = transactions.filter(t => !t.hasReminder);
+                const urgent = transactions.filter(t => t.hasReminder && (!selectedAccountId || t.accountId === selectedAccountId));
+                const recent = transactions.filter(t => !t.hasReminder && (!selectedAccountId || t.accountId === selectedAccountId));
                 const recentLimit = urgent.length === 0 ? 5 : 3;
                 
                 return (
