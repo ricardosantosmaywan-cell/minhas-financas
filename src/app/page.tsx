@@ -247,6 +247,8 @@ export default function Home() {
 
   // Reports Filter State
   const [reportsAccount, setReportsAccount] = useState<string>('all');
+  const [reportsCategory, setReportsCategory] = useState<string>('all');
+  const [reportsSubcategory, setReportsSubcategory] = useState<string>('all');
   const [reportsStartDate, setReportsStartDate] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [reportsEndDate, setReportsEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reportNotes, setReportNotes] = useState<string>('');
@@ -1467,15 +1469,39 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-4">Relatórios</h2>
             
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="col-span-2 bg-gray-900 p-3 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+              <div className="col-span-2 bg-gray-900 p-2 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
                 <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Filtro por Conta</span>
                 <select 
-                  className="bg-transparent text-sm font-medium text-white outline-none w-full cursor-pointer"
+                  className="bg-transparent text-xs font-medium text-white outline-none w-full cursor-pointer"
                   value={reportsAccount}
                   onChange={(e) => setReportsAccount(e.target.value)}
                 >
                   <option value="all">Todas as Contas</option>
                   {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                </select>
+              </div>
+
+              <div className="col-span-2 bg-gray-900 p-2 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Filtro por Categoria</span>
+                <select 
+                  className="bg-transparent text-xs font-medium text-white outline-none w-full cursor-pointer"
+                  value={reportsCategory}
+                  onChange={(e) => { setReportsCategory(e.target.value); setReportsSubcategory('all'); }}
+                >
+                  <option value="all">Todas as Categorias</option>
+                  {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                </select>
+              </div>
+
+              <div className="col-span-2 bg-gray-900 p-2 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Filtro por Subcategoria</span>
+                <select 
+                  className="bg-transparent text-xs font-medium text-white outline-none w-full cursor-pointer"
+                  value={reportsSubcategory}
+                  onChange={(e) => setReportsSubcategory(e.target.value)}
+                >
+                  <option value="all">Todas as Subcategorias</option>
+                  {subcategories.filter(s => reportsCategory === 'all' || s.categoryId === reportsCategory).map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
                 </select>
               </div>
 
@@ -1534,8 +1560,10 @@ export default function Home() {
             {(() => {
               const filteredTxs = transactions.filter(t => {
                 const matchAcc = reportsAccount === 'all' ? true : t.accountId === reportsAccount;
+                const matchCat = reportsCategory === 'all' ? true : t.categoryId === reportsCategory;
+                const matchSub = reportsSubcategory === 'all' ? true : t.subcategoryId === reportsSubcategory;
                 const matchTime = t.date >= reportsStartDate && t.date <= reportsEndDate;
-                return matchAcc && matchTime;
+                return matchAcc && matchCat && matchSub && matchTime;
               });
 
               const totalIn = filteredTxs.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
