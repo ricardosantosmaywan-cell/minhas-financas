@@ -1573,7 +1573,7 @@ export default function Home() {
                         filteredTxs.map(t => {
                           const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
                           return (
-                            <div key={t.id} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between active:scale-[0.99] transition-all shadow-sm">
+                            <div key={t.id} onClick={() => handleOpenEditForm(t)} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between active:scale-[0.99] transition-all shadow-sm hover:bg-gray-800 hover:border-gray-700 cursor-pointer">
                               <div className="flex items-center space-x-4 min-w-0 flex-1">
                                 <div onClick={() => handleOpenEditForm(t)} className={`w-10 h-10 rounded-full ${cat.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'} flex items-center justify-center relative shrink-0 cursor-pointer`}>
                                   <svg className={`w-5 h-5 ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.iconPath} /></svg>
