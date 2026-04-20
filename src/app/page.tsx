@@ -1161,7 +1161,7 @@ export default function Home() {
               <p className="text-gray-400 text-sm font-medium mb-2 flex items-center justify-center">
                 {currentView === 'accounts' ? defaultAccount.name : 
                  currentView === 'transactions' ? 'Histórico Geral' :
-                 currentView === 'reports' ? (selectedAccountId ? accounts.find(a => a.id === selectedAccountId)?.name || 'Balanço do Período' : 'Balanço do Período') : 
+                 currentView === 'reports' ? 'Relatórios' : 
                  currentView === 'categories' ? 'Minhas Categorias' :
                  currentView === 'alerts' ? 'Notificações Ativas' : 
                  <>Saldo Atual <span className="mx-2 text-gray-700">&bull;</span> <span className="text-white">{defaultAccount.name}</span></>}
@@ -1609,7 +1609,6 @@ export default function Home() {
                                 <div className="min-w-0 cursor-pointer flex-1" onClick={() => handleOpenEditForm(t)}>
                                   <p className="text-white font-medium text-sm truncate">{t.description}</p>
                                   <p className="text-gray-500 text-[10px] mt-1">
-                                    {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName}</span> : ''}{t.accountName && (cat.name || t.subcategoryId) ? <span className="text-gray-600"> • </span> : ''}
                                     {cat.name && <span className="font-semibold text-blue-400">{cat.name}</span>}
                                     {t.subcategoryId && subcategories.find(s => s.id === t.subcategoryId)?.name && <span className="font-semibold text-purple-400"> • {subcategories.find(s => s.id === t.subcategoryId)?.name}</span>}
                                   </p>
