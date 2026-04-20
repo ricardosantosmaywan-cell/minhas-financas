@@ -1185,7 +1185,7 @@ export default function Home() {
               <h2 className="text-xl font-semibold mb-4">Minhas Contas</h2>
               <div className="grid grid-cols-2 gap-3">
                 {accounts.filter(acc => !acc.isDefault).map(acc => (
-                  <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-32 active:scale-95 transition-transform cursor-pointer relative group" onClick={() => setCurrentView('accounts')}>
+                  <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-32 active:scale-95 transition-transform cursor-pointer relative group" onClick={() => { setSelectedAccountId(acc.id); setCurrentView('dashboard'); }}>
                     <button 
                       onClick={(e) => handleSetDefaultAccount(acc.id, e)} 
                       className="absolute top-2 right-2 p-1.5 rounded-full bg-gray-800 text-gray-500 hover:text-yellow-500 transition-colors"
