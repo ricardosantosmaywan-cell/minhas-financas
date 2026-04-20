@@ -1564,7 +1564,7 @@ export default function Home() {
 
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2">Detalhamento de Despesas</h3>
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto scrollbar-hide pr-1">
+                    <div className="space-y-3 max-h-[700px] overflow-y-auto scrollbar-hide pr-1 pb-20">
                       {filteredTxs.length === 0 ? (
                         <div className="text-center py-10 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800">
                           <p className="text-gray-500 text-sm">Nenhuma transação no período.</p>
