@@ -1468,6 +1468,37 @@ export default function Home() {
           <div className="space-y-6 animate-fade-in pb-8">
             <h2 className="text-xl font-semibold mb-4">Relatórios</h2>
             
+            {(() => {
+              const filteredTxs = transactions.filter(t => {
+                const matchAcc = reportsAccount === 'all' ? true : t.accountId === reportsAccount;
+                const matchCat = reportsCategory === 'all' ? true : t.categoryId === reportsCategory;
+                const matchSub = reportsSubcategory === 'all' ? true : t.subcategoryId === reportsSubcategory;
+                const matchTime = t.date >= reportsStartDate && t.date <= reportsEndDate;
+                return matchAcc && matchCat && matchSub && matchTime;
+              });
+
+              const totalIn = filteredTxs.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
+              const totalOut = filteredTxs.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
+              const balance = totalIn - totalOut;
+
+              return (
+                <div className="bg-gray-900 p-5 rounded-[1.5rem] border border-gray-800 grid grid-cols-3 gap-2 mb-6">
+                  <div className="text-center col-span-1">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Entradas</p>
+                    <p className="text-emerald-500 font-bold text-lg">{formatCurrency(totalIn)}</p>
+                  </div>
+                  <div className="col-span-1 text-center border-l border-gray-800">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saídas</p>
+                    <p className="text-rose-500 font-bold text-lg">{formatCurrency(totalOut)}</p>
+                  </div>
+                  <div className="col-span-1 text-center border-l border-gray-800">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saldo</p>
+                    <p className={`font-bold text-lg ${balance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>{formatCurrency(balance)}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="col-span-2 bg-gray-900 p-2 rounded-xl border border-gray-800 focus-within:border-blue-500 transition-colors">
                 <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Filtro por Conta</span>
@@ -1566,29 +1597,8 @@ export default function Home() {
                 return matchAcc && matchCat && matchSub && matchTime;
               });
 
-              const totalIn = filteredTxs.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
-              const totalOut = filteredTxs.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
-              const balance = totalIn - totalOut;
-
-              return (
+return (
                 <>
-                  <div className="bg-gray-900 p-5 rounded-[1.5rem] border border-gray-800 flex justify-between items-center mb-8">
-                    <div className="text-center">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Entradas</p>
-                      <p className="text-emerald-500 font-semibold">{formatCurrency(totalIn)}</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800"></div>
-                    <div className="text-center">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saídas</p>
-                      <p className="text-rose-500 font-semibold">{formatCurrency(totalOut)}</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800"></div>
-                    <div className="text-center">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Saldo</p>
-                      <p className={`font-bold ${balance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>{formatCurrency(balance)}</p>
-                    </div>
-                  </div>
-
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2">Detalhamento de Despesas</h3>
                     <div className="space-y-3 max-h-[700px] overflow-y-auto scrollbar-hide pr-1 pb-20">
