@@ -1606,12 +1606,15 @@ export default function Home() {
                                 <div onClick={() => handleOpenEditForm(t)} className={`w-10 h-10 rounded-full ${cat.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'} flex items-center justify-center relative shrink-0 cursor-pointer`}>
                                   <svg className={`w-5 h-5 ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.iconPath} /></svg>
                                 </div>
-                                <div className="min-w-0 cursor-pointer" onClick={() => handleOpenEditForm(t)}>
+                                <div className="min-w-0 cursor-pointer flex-1" onClick={() => handleOpenEditForm(t)}>
                                   <p className="text-white font-medium text-sm truncate">{t.description}</p>
-                                  <p className="text-gray-500 text-[10px]">
+                                  <p className="text-gray-500 text-[10px] mt-1">
+                                    {t.accountName ? <span className="font-semibold text-gray-400">{t.accountName}</span> : ''}{t.accountName && (cat.name || t.subcategoryId) ? <span className="text-gray-600"> • </span> : ''}
                                     {cat.name && <span className="font-semibold text-blue-400">{cat.name}</span>}
                                     {t.subcategoryId && subcategories.find(s => s.id === t.subcategoryId)?.name && <span className="font-semibold text-purple-400"> • {subcategories.find(s => s.id === t.subcategoryId)?.name}</span>}
-                                    {cat.name || t.subcategoryId ? '' : <span className="font-semibold text-gray-400">{t.accountName}</span>}{ (cat.name || t.subcategoryId) && t.accountName ? <span className="text-gray-600"> • </span> : ''}{formatDateDisplay(t.date)}
+                                  </p>
+                                  <p className="text-gray-600 text-[10px] mt-0.5">
+                                    {formatDateDisplay(t.date)}
                                   </p>
                                 </div>
                               </div>
