@@ -1108,7 +1108,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans flex flex-col relative pb-24 overflow-hidden px-4 md:px-0">
+    <div className="h-screen bg-black text-white font-sans flex flex-col relative overflow-hidden px-4 md:px-0">
       <style>{`
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1404,7 +1404,7 @@ export default function Home() {
                         </div>
                       </div>
                       
-                      <div className="overflow-y-auto scrollbar-thin space-y-3 pb-2 pr-2 max-h-[380px] md:max-h-[412px]">
+                      <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pb-24 pr-2">
                       {recent.length === 0 ? (
                         <p className="text-gray-500 text-center py-6 text-sm">Nenhuma transação encontrada</p>
                       ) : (
