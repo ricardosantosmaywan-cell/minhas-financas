@@ -1253,10 +1253,13 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <header className="pt-14 md:pt-20 pb-6 md:pb-10 px-6 bg-gradient-to-b from-gray-900 to-black rounded-b-[2.5rem] border-b border-gray-800/50 shadow-lg relative z-10 flex flex-col items-center text-center">
+      <header className="pt-14 md:pt-20 pb-8 md:pb-12 px-6 bg-gradient-to-b from-gray-900 to-black rounded-b-[2.5rem] border-b border-gray-800/50 shadow-lg relative z-10 flex flex-col items-center text-center">
         <button onClick={() => setIsSidebarOpen(true)} className="absolute top-10 md:top-14 left-6 p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
           <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
+        <div className="absolute top-12 md:top-16 left-1/2 -translate-x-1/2">
+          <h2 className="text-sm md:text-base font-semibold text-white tracking-wide">Minhas Contas</h2>
+        </div>
         <button onClick={() => { setIsProfileModalOpen(true); setProfileName(userProfile?.full_name || ''); }} className="absolute top-10 md:top-14 right-6 w-10 h-10 rounded-full border border-gray-800 overflow-hidden shadow-lg bg-gray-900">
            <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="User" className="w-full h-full object-cover" />
         </button>
@@ -1274,7 +1277,7 @@ export default function Home() {
           const filteredExpense = periodTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
           return (
-            <div className="mt-2 flex flex-col items-center">
+            <div className="mt-10 md:mt-12 flex flex-col items-center">
               <p className="text-gray-400 text-xs md:text-sm font-medium mb-1 md:mb-2 flex items-center justify-center">
                 {currentView === 'accounts' ? activeAccount.name : 
                  currentView === 'transactions' ? 'Histórico Geral' :
@@ -1283,7 +1286,7 @@ export default function Home() {
                  currentView === 'alerts' ? 'Notificações Ativas' : 
                  <>Saldo Atual <span className="mx-2 text-gray-700 md:inline hidden">&bull;</span> <span className="text-white ml-1 md:ml-0">{activeAccount.name}</span></>}
               </p>
-              <h1 className="text-[2.25rem] md:text-[2.75rem] leading-none font-extrabold tracking-tight text-white drop-shadow-md">
+              <h1 className="text-[2rem] md:text-[2.25rem] leading-none font-extrabold tracking-tight text-white drop-shadow-md">
                 {currentView === 'categories' ? categories.length : 
                  currentView === 'alerts' ? transactions.filter(t => t.hasReminder).length : 
                  currentView === 'transactions' ? transactions.length :
@@ -1292,11 +1295,11 @@ export default function Home() {
               </h1>
               {currentView === 'dashboard' && (
                 <div className="flex flex-col items-center mt-3 space-y-1">
-                  <p className="text-emerald-400 text-[11px] font-bold flex items-center uppercase tracking-wider">
+                  <p className="text-emerald-400 text-[10px] font-bold flex items-center uppercase tracking-wider">
                     <span className="opacity-60 mr-2">Receitas:</span>
                     + {formatCurrency(filteredIncome)}
                   </p>
-                  <p className="text-rose-400 text-[11px] font-bold flex items-center uppercase tracking-wider">
+                  <p className="text-rose-400 text-[10px] font-bold flex items-center uppercase tracking-wider">
                     <span className="opacity-60 mr-2">Despesas:</span>
                     - {formatCurrency(filteredExpense)}
                   </p>
@@ -1308,11 +1311,10 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className={`flex-1 px-2 md:px-6 py-6 flex flex-col relative z-0 ${currentView === 'dashboard' ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide'}`}>
+      <main className={`flex-1 px-2 md:px-6 pt-2 pb-6 md:py-6 flex flex-col relative z-0 ${currentView === 'dashboard' ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide'}`}>
         {currentView === 'dashboard' && (
           <div className="flex flex-col h-full animate-fade-in">
-            <div className="space-y-4 mb-6 shrink-0">
-              <h2 className="text-xl font-semibold mb-4">Minhas Contas</h2>
+            <div className="mb-2 shrink-0">
               <div className="grid grid-cols-2 gap-3">
                 {accounts.filter(acc => !acc.isDefault).map(acc => (
                   <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-28 md:h-32 active:scale-95 transition-transform cursor-pointer relative group" onClick={() => { setSelectedAccountId(acc.id); setCurrentView('dashboard'); }}>
@@ -1379,8 +1381,8 @@ export default function Home() {
                       </div>
                     )}
 
-                      <div className="flex flex-col space-y-4 mb-6">
-                        <div className="flex items-center justify-between w-full border-b border-gray-900/50 pb-2">
+                      <div className="flex flex-col space-y-6 mb-6">
+                        <div className="flex items-center justify-between w-full border-b border-gray-900/50 pb-4">
                           <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Últimas Transações</h2>
                           <div className="flex items-center space-x-2 shrink-0">
                             <span className="text-[9px] text-gray-500 uppercase tracking-widest">Ocultar Comp.</span>
