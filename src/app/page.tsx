@@ -1286,7 +1286,7 @@ export default function Home() {
                  currentView === 'alerts' ? 'Notificações Ativas' : 
                  <>Saldo Atual <span className="mx-2 text-gray-700 md:inline hidden">&bull;</span> <span className="text-white ml-1 md:ml-0">{activeAccount.name}</span></>}
               </p>
-              <h1 className="text-[2rem] md:text-[2.25rem] leading-none font-extrabold tracking-tight text-white drop-shadow-md">
+              <h1 className="text-[2.75rem] md:text-[3.5rem] leading-none font-black tracking-tight text-white drop-shadow-md">
                 {currentView === 'categories' ? categories.length : 
                  currentView === 'alerts' ? transactions.filter(t => t.hasReminder).length : 
                  currentView === 'transactions' ? transactions.length :
@@ -1294,14 +1294,14 @@ export default function Home() {
                  formatCurrency(filteredIncome - filteredExpense)}
               </h1>
               {currentView === 'dashboard' && (
-                <div className="flex flex-col items-center mt-3 space-y-1">
-                  <p className="text-emerald-400 text-[10px] font-bold flex items-center uppercase tracking-wider">
-                    <span className="opacity-60 mr-2">Receitas:</span>
-                    + {formatCurrency(filteredIncome)}
+                <div className="flex flex-col items-center mt-4 space-y-2">
+                  <p className="flex items-center">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 opacity-70 mr-2">Receitas:</span>
+                    <span className="text-sm md:text-base font-extrabold text-emerald-400 tracking-tight">+ {formatCurrency(filteredIncome)}</span>
                   </p>
-                  <p className="text-rose-400 text-[10px] font-bold flex items-center uppercase tracking-wider">
-                    <span className="opacity-60 mr-2">Despesas:</span>
-                    - {formatCurrency(filteredExpense)}
+                  <p className="flex items-center">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 opacity-70 mr-2">Despesas:</span>
+                    <span className="text-sm md:text-base font-extrabold text-rose-400 tracking-tight">- {formatCurrency(filteredExpense)}</span>
                   </p>
                 </div>
               )}
