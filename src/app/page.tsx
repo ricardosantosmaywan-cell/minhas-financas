@@ -51,6 +51,7 @@ type TransactionRecord = {
   reminderTime?: string;
   isCritical?: boolean;
   ocrUrl?: string;
+  isCleared?: boolean;
 };
 
 // No initial mock data, entirely DB driven
@@ -63,6 +64,9 @@ export default function Home() {
   // Navigation & Views
   const [currentView, setCurrentView] = useState<'dashboard' | 'transactions' | 'accounts' | 'reports' | 'categories' | 'alerts' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [hideCleared, setHideCleared] = useState(false);
+  const [dashboardStartDate, setDashboardStartDate] = useState('');
+  const [dashboardEndDate, setDashboardEndDate] = useState('');
 
   // Accounts State
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -108,6 +112,26 @@ export default function Home() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Persistence for Dashboard Filters
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedStart = localStorage.getItem('dashboardStartDate');
+      const savedEnd = localStorage.getItem('dashboardEndDate');
+      const savedHide = localStorage.getItem('hideCleared');
+      if (savedStart) setDashboardStartDate(savedStart);
+      if (savedEnd) setDashboardEndDate(savedEnd);
+      if (savedHide) setHideCleared(savedHide === 'true');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboardStartDate', dashboardStartDate);
+      localStorage.setItem('dashboardEndDate', dashboardEndDate);
+      localStorage.setItem('hideCleared', hideCleared.toString());
+    }
+  }, [dashboardStartDate, dashboardEndDate, hideCleared]);
 
   const fetchData = async (userId: string) => {
     setIsLoadingDb(true);
@@ -167,7 +191,7 @@ export default function Home() {
       if (txError) console.error("Error fetching transactions with join:", txError);
       const txList = txs || [];
       if (txList) {
-        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: t.category_id || '', subcategoryId: t.subcategory_id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url })));
+        setTransactions(txList.map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, accountId: t.account_id, accountName: t.accounts?.name || '', categoryId: t.category_id || '', subcategoryId: t.subcategory_id || '', description: t.description, hasReminder: false, reminderTime: undefined, isCritical: false, ocrUrl: t.ocr_url, isCleared: t.is_cleared || false })));
       } else {
         setTransactions([]);
       }
@@ -260,6 +284,7 @@ export default function Home() {
   // Notifications & Loaders
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearedForm, setIsClearedForm] = useState(false);
 
   // Computed
   const totalBalance = accounts.reduce((acc, curr) => acc + curr.balance, 0);
@@ -296,9 +321,10 @@ export default function Home() {
     setSelectedCategoryId(t.categoryId || '');
     setTransactionDate(t.date.includes('-') ? t.date : new Date().toISOString().split('T')[0]);
     setIsReminderActive(t.hasReminder);
-    if (t.reminderTime) setReminderTime(t.reminderTime as any);
+    setReminderTime(t.reminderTime as any);
     const subs = subcategories.filter(s => s.categoryId === t.categoryId);
     setSelectedSubcategoryId(subs.length > 0 ? subs[0].id : '');
+    setIsClearedForm(!!t.isCleared);
     setIsFormOpen(true);
     setActiveInput('amount');
   };
@@ -313,6 +339,7 @@ export default function Home() {
     setIsReminderActive(false);
     setReminderTime('24_hours');
     setIsOcrProcessing(false);
+    setIsClearedForm(false);
     const d = new Date();
     setTransactionDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
   };
@@ -346,11 +373,11 @@ export default function Home() {
           subcategory_id: selectedSubcategoryId || null,
           description,
           ocr_url: ocrUrl || null,
+          is_cleared: isClearedForm,
         };
-        console.log('Tentando atualizar:', updatePayload);
         const { error } = await supabase.from('transactions').update(updatePayload).eq('id', editingTransactionId);
         if (error) {
-          console.log('Erro do Supabase:', error);
+          console.error('Erro do Supabase:', error);
           alert('Erro Supabase: ' + error.message);
           throw error;
         }
@@ -370,11 +397,11 @@ export default function Home() {
           subcategory_id: selectedSubcategoryId || null,
           description,
           ocr_url: ocrUrl || null,
+          is_cleared: isClearedForm,
         };
-        console.log('Tentando salvar:', insertPayload);
         const { error } = await supabase.from('transactions').insert(insertPayload);
         if (error) {
-          console.log('Erro do Supabase:', error);
+          console.error('Erro do Supabase:', error);
           alert('Erro Supabase: ' + error.message);
           throw error;
         }
@@ -390,6 +417,16 @@ export default function Home() {
       setToastMessage(error.message || 'Erro ao salvar transação');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const toggleTransactionCleared = async (id: string, currentStatus: boolean, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTransactions(prev => prev.map(tx => tx.id === id ? { ...tx, isCleared: !currentStatus } : tx));
+    try {
+      await supabase.from('transactions').update({ is_cleared: !currentStatus }).eq('id', id);
+    } catch (err) {
+      console.error('Erro ao atualizar status', err);
     }
   };
 
@@ -525,8 +562,34 @@ export default function Home() {
         }
       }
 
-      doc.save(`Relatorio_Prestacao_Contas_${reportsStartDate}.pdf`);
-      setToastMessage('PDF gerado com sucesso!');
+      const fileName = `Relatorio_Prestacao_Contas_${reportsStartDate}.pdf`;
+      
+      // Verifica se o Blob do PDF está sendo criado corretamente
+      const pdfBlob = doc.output('blob');
+      
+      if (pdfBlob && pdfBlob.size > 0) {
+        try {
+          // Tenta forçar o download automático padrão do jsPDF
+          doc.save(fileName);
+        } catch (e) {
+          console.warn('doc.save falhou, tentando abrir em nova aba com URL temporária', e);
+          const url = URL.createObjectURL(pdfBlob);
+          // Tenta abrir em nova aba para contornar restrições de sandbox
+          window.open(url, '_blank');
+          
+          // E mantém a tentativa de download programático para caso a nova aba falhe
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        setToastMessage('PDF gerado com sucesso!');
+      } else {
+        throw new Error('Falha ao criar o arquivo PDF. Tamanho do Blob é 0 ou nulo.');
+      }
     } catch (error) {
       console.error(error);
       setToastMessage('Erro ao gerar PDF.');
@@ -744,7 +807,6 @@ export default function Home() {
     try {
       if (editingAccount) {
         const payload = { name, current_balance: balance };
-        console.log('Tentando atualizar conta:', payload);
         const { error } = await supabase.from('accounts').update(payload).eq('id', editingAccount.id);
         if (error) {
           alert('Erro Supabase: ' + JSON.stringify(error));
@@ -757,7 +819,6 @@ export default function Home() {
           name: name,
           current_balance: balance
         };
-        console.log('Tentando salvar conta:', payload);
         const { error } = await supabase.from('accounts').insert(payload);
         if (error) {
           alert('Erro Supabase: ' + JSON.stringify(error));
@@ -819,7 +880,6 @@ export default function Home() {
     const iconColor = catType === 'expense' ? 'text-orange-500' : 'text-emerald-500';
     const iconPath = 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z';
     
-    console.log('SAVE CATEGORY:', { name, type: catType, icon_color: iconColor, user_id: user.id });
     setIsSaving(true);
     let newId = '';
     
@@ -1005,7 +1065,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans flex flex-col relative pb-24 overflow-hidden">
+    <div className="min-h-screen bg-black text-white font-sans flex flex-col relative pb-24 overflow-hidden px-4 md:px-0">
       <style>{`
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1015,9 +1075,12 @@ export default function Home() {
         .animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
         .animate-slide-right { animation: slideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .toggle-checkbox:checked { right: 0; border-color: ${toggleColorHex}; }
         .toggle-checkbox:checked + .toggle-label { background-color: ${toggleColorHex}; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(75, 85, 99, 0.4); border-radius: 10px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(75, 85, 99, 0.8); }
       `}</style>
 
       {/* Critical Toast Notification Simulation */}
@@ -1147,47 +1210,69 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <header className="pt-20 pb-10 px-6 bg-gradient-to-b from-gray-900 to-black rounded-b-[2.5rem] border-b border-gray-800/50 shadow-lg relative z-10 flex flex-col items-center text-center">
-        <button onClick={() => setIsSidebarOpen(true)} className="absolute top-14 left-6 p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
+      <header className="pt-14 md:pt-20 pb-6 md:pb-10 px-6 bg-gradient-to-b from-gray-900 to-black rounded-b-[2.5rem] border-b border-gray-800/50 shadow-lg relative z-10 flex flex-col items-center text-center">
+        <button onClick={() => setIsSidebarOpen(true)} className="absolute top-10 md:top-14 left-6 p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
           <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
-        <button onClick={() => { setIsProfileModalOpen(true); setProfileName(userProfile?.full_name || ''); }} className="absolute top-14 right-6 w-10 h-10 rounded-full border border-gray-800 overflow-hidden shadow-lg bg-gray-900">
+        <button onClick={() => { setIsProfileModalOpen(true); setProfileName(userProfile?.full_name || ''); }} className="absolute top-10 md:top-14 right-6 w-10 h-10 rounded-full border border-gray-800 overflow-hidden shadow-lg bg-gray-900">
            <img src={userProfile?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="User" className="w-full h-full object-cover" />
         </button>
         {(() => {
-          const defaultAccount = accounts.find(a => a.isDefault) || accounts[0] || { name: 'Sem Conta', balance: 0 };
+          const activeAccount = accounts.find(a => a.id === selectedAccountId) || accounts.find(a => a.isDefault) || accounts[0] || { name: 'Sem Conta', balance: 0, expense: 0, income: 0 };
+          
+          // Calculate dynamic totals for the dashboard header based on period filters
+          const dashboardTxs = transactions.filter(t => !t.hasReminder && (!selectedAccountId || t.accountId === selectedAccountId));
+          const periodTxs = dashboardTxs.filter(t => {
+            const matchStart = dashboardStartDate ? t.date >= dashboardStartDate : true;
+            const matchEnd = dashboardEndDate ? t.date <= dashboardEndDate : true;
+            return matchStart && matchEnd;
+          });
+          const filteredIncome = periodTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+          const filteredExpense = periodTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+
           return (
             <div className="mt-2 flex flex-col items-center">
-              <p className="text-gray-400 text-sm font-medium mb-2 flex items-center justify-center">
-                {currentView === 'accounts' ? defaultAccount.name : 
+              <p className="text-gray-400 text-xs md:text-sm font-medium mb-1 md:mb-2 flex items-center justify-center">
+                {currentView === 'accounts' ? activeAccount.name : 
                  currentView === 'transactions' ? 'Histórico Geral' :
                  currentView === 'reports' ? 'Relatórios' : 
                  currentView === 'categories' ? 'Minhas Categorias' :
                  currentView === 'alerts' ? 'Notificações Ativas' : 
-                 <>Saldo Atual <span className="mx-2 text-gray-700">&bull;</span> <span className="text-white">{defaultAccount.name}</span></>}
+                 <>Saldo Atual <span className="mx-2 text-gray-700 md:inline hidden">&bull;</span> <span className="text-white ml-1 md:ml-0">{activeAccount.name}</span></>}
               </p>
-              <h1 className="text-[2.75rem] leading-none font-extrabold tracking-tight text-white drop-shadow-md">
+              <h1 className="text-[2.25rem] md:text-[2.75rem] leading-none font-extrabold tracking-tight text-white drop-shadow-md">
                 {currentView === 'categories' ? categories.length : 
                  currentView === 'alerts' ? transactions.filter(t => t.hasReminder).length : 
                  currentView === 'transactions' ? transactions.length :
                  currentView === 'reports' ? '' :
-                 currentView === 'accounts' ? formatCurrency(defaultAccount.balance) :
-                 formatCurrency(defaultAccount.balance)}
+                 formatCurrency(activeAccount.balance)}
               </h1>
+              {currentView === 'dashboard' && (
+                <div className="flex flex-col items-center mt-3 space-y-1">
+                  <p className="text-emerald-400 text-[11px] font-bold flex items-center uppercase tracking-wider">
+                    <span className="opacity-60 mr-2">Receitas:</span>
+                    + {formatCurrency(filteredIncome)}
+                  </p>
+                  <p className="text-rose-400 text-[11px] font-bold flex items-center uppercase tracking-wider">
+                    <span className="opacity-60 mr-2">Despesas:</span>
+                    - {formatCurrency(filteredExpense)}
+                  </p>
+                </div>
+              )}
             </div>
           );
         })()}
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 px-6 py-6 overflow-y-auto relative z-0 scrollbar-hide">
+      <main className={`flex-1 px-2 md:px-6 py-6 flex flex-col relative z-0 ${currentView === 'dashboard' ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide'}`}>
         {currentView === 'dashboard' && (
-          <div className="space-y-8 animate-fade-in">
-            <div className="space-y-4">
+          <div className="flex flex-col h-full animate-fade-in">
+            <div className="space-y-4 mb-6 shrink-0">
               <h2 className="text-xl font-semibold mb-4">Minhas Contas</h2>
               <div className="grid grid-cols-2 gap-3">
                 {accounts.filter(acc => !acc.isDefault).map(acc => (
-                  <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-32 active:scale-95 transition-transform cursor-pointer relative group" onClick={() => { setSelectedAccountId(acc.id); setCurrentView('dashboard'); }}>
+                  <div key={acc.id} className="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-col justify-between h-28 md:h-32 active:scale-95 transition-transform cursor-pointer relative group" onClick={() => { setSelectedAccountId(acc.id); setCurrentView('dashboard'); }}>
                     <button 
                       onClick={(e) => handleSetDefaultAccount(acc.id, e)} 
                       className="absolute top-2 right-2 p-1.5 rounded-full bg-gray-800 text-gray-500 hover:text-yellow-500 transition-colors"
@@ -1210,16 +1295,19 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="flex-1 flex flex-col overflow-hidden">
               {(() => {
                 const urgent = transactions.filter(t => t.hasReminder && (!selectedAccountId || t.accountId === selectedAccountId));
-                const recent = transactions.filter(t => !t.hasReminder && (!selectedAccountId || t.accountId === selectedAccountId));
-                const recentLimit = urgent.length === 0 ? 5 : 3;
+                let recent = transactions.filter(t => !t.hasReminder && (!selectedAccountId || t.accountId === selectedAccountId));
                 
+                if (hideCleared) recent = recent.filter(t => !t.isCleared);
+                if (dashboardStartDate) recent = recent.filter(t => t.date >= dashboardStartDate);
+                if (dashboardEndDate) recent = recent.filter(t => t.date <= dashboardEndDate);
+
                 return (
                   <>
                     {urgent.length > 0 && (
-                      <div className="space-y-3">
+                      <div className="space-y-3 shrink-0 mb-4">
                         <h2 className="text-[13px] font-bold text-yellow-500 uppercase tracking-widest flex items-center mb-4">
                           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           Agenda Urgente
@@ -1248,30 +1336,59 @@ export default function Home() {
                       </div>
                     )}
 
-                    <div className="space-y-3 pt-2">
-                      <h2 className="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-4">Últimas Transações</h2>
-                      {recent.slice(0, recentLimit).map(t => {
-                        const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
-                        return (
-                          <div key={t.id} onClick={() => handleOpenEditForm(t)} className="p-4 bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-between cursor-pointer active:scale-95 transition-transform">
-                            <div className="flex items-center space-x-4">
-                              <div className={`w-10 h-10 rounded-full ${cat.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'} flex items-center justify-center`}>
-                                <svg className={`w-5 h-5 ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.iconPath} /></svg>
-                              </div>
-                              <div>
-                                <p className="text-white font-medium">{t.description}</p>
-                                <p className="text-gray-500 text-xs">
-{t.accountName ? <span className="font-semibold text-gray-400">Conta: {t.accountName} • </span> : ''}{t.date}
-                                </p>
-                              </div>
+                      <div className="flex flex-col space-y-4 mb-6">
+                        <div className="flex items-center justify-between w-full border-b border-gray-900/50 pb-2">
+                          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Últimas Transações</h2>
+                          <div className="flex items-center space-x-2 shrink-0">
+                            <span className="text-[9px] text-gray-500 uppercase tracking-widest">Ocultar Comp.</span>
+                            <div className="relative inline-block w-8 align-middle select-none transition duration-200 ease-in">
+                              <input type="checkbox" id="hide-cleared-toggle" checked={hideCleared} onChange={() => setHideCleared(!hideCleared)} className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-[3px] appearance-none cursor-pointer border-gray-600 transition-all z-10" />
+                              <label htmlFor="hide-cleared-toggle" className="toggle-label block overflow-hidden h-4 rounded-full bg-gray-700 cursor-pointer transition-colors"></label>
                             </div>
-                            <p className={`font-semibold ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
-                            </p>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                        <div className="flex items-center justify-between w-full space-x-3">
+                          <div className="flex-1 bg-gray-900 p-2.5 rounded-xl border border-gray-800 flex flex-col">
+                            <span className="text-[8px] text-gray-500 font-extrabold mb-1 uppercase tracking-tighter">De</span>
+                            <input type="date" value={dashboardStartDate} onChange={(e) => setDashboardStartDate(e.target.value)} className="bg-transparent text-gray-300 text-[11px] outline-none w-full" />
+                          </div>
+                          <div className="flex-1 bg-gray-900 p-2.5 rounded-xl border border-gray-800 flex flex-col">
+                            <span className="text-[8px] text-gray-500 font-extrabold mb-1 uppercase tracking-tighter">Até</span>
+                            <input type="date" value={dashboardEndDate} onChange={(e) => setDashboardEndDate(e.target.value)} className="bg-transparent text-gray-300 text-[11px] outline-none w-full" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="overflow-y-auto scrollbar-thin space-y-3 pb-2 pr-2 max-h-[380px] md:max-h-[412px]">
+                      {recent.length === 0 ? (
+                        <p className="text-gray-500 text-center py-6 text-sm">Nenhuma transação encontrada</p>
+                      ) : (
+                        recent.map(t => {
+                          const cat = categories.find(c => c.id === t.categoryId) || { iconColor: 'text-gray-500', iconPath: '', name: 'Sem Categoria', type: 'expense' };
+                          return (
+                            <div key={t.id} onClick={() => handleOpenEditForm(t)} className={`p-3 md:p-4 bg-gray-900 rounded-2xl border flex items-center justify-between cursor-pointer active:scale-95 transition-transform ${t.isCleared ? 'border-emerald-500/30 opacity-70' : 'border-gray-800'}`}>
+                              <div className="flex items-center space-x-3 md:space-x-4 min-w-0">
+                                <button onClick={(e) => toggleTransactionCleared(t.id, !!t.isCleared, e)} className={`w-5 h-5 md:w-6 md:h-6 rounded-md border flex items-center justify-center transition-colors shrink-0 ${t.isCleared ? 'bg-emerald-500 border-emerald-500' : 'bg-gray-800 border-gray-600 hover:border-gray-400'}`}>
+                                  {t.isCleared && <svg className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                </button>
+                                <div className={`w-9 h-9 md:w-10 md:h-10 rounded-full ${cat.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'} flex items-center justify-center shrink-0`}>
+                                  <svg className={`w-4 h-4 md:w-5 md:h-5 ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.iconPath} /></svg>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-white font-medium text-sm md:text-base truncate">{t.description}</p>
+                                  <p className="text-gray-500 text-[10px] md:text-xs truncate">
+                                    {t.accountName ? <span className="font-semibold text-gray-400">Conta: {t.accountName} • </span> : ''}{t.date}
+                                  </p>
+                                </div>
+                              </div>
+                              <p className={`font-bold text-xs md:text-base ml-2 shrink-0 ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
+                      </div>
                   </>
                 );
               })()}
@@ -1668,21 +1785,21 @@ return (
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 w-full bg-gray-950 border-t border-gray-800 px-8 py-4 flex justify-between items-center rounded-t-[2rem] z-30">
+      <nav className="fixed bottom-0 w-full bg-gray-950 border-t border-gray-800 px-8 pt-4 pb-6 md:pb-4 flex justify-between items-center rounded-t-[2.5rem] z-30 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
         <button onClick={() => setCurrentView('dashboard')} className={`flex flex-col items-center justify-center w-16 transition-colors ${currentView === 'dashboard' ? 'text-blue-500' : 'text-gray-500'}`}>
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-          <span className="text-[10px] font-medium">Home</span>
+          <span className="text-[10px] font-bold">Home</span>
         </button>
 
-        <div className="absolute left-1/2 -translate-x-1/2 -top-6">
-          <button onClick={handleOpenActionModal} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30 hover:bg-blue-500 transition-transform active:scale-90 border-[6px] border-black">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+        <div className="absolute left-1/2 -translate-x-1/2 -top-7">
+          <button onClick={handleOpenActionModal} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/40 hover:bg-blue-500 transition-all active:scale-90 border-[5px] border-black">
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
           </button>
         </div>
 
         <button onClick={() => setCurrentView('accounts')} className={`flex flex-col items-center justify-center w-16 transition-colors ${currentView === 'accounts' ? 'text-blue-500' : 'text-gray-500'}`}>
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-          <span className="text-[10px] font-medium">Contas</span>
+          <span className="text-[10px] font-bold">Contas</span>
         </button>
       </nav>
 
@@ -2013,6 +2130,14 @@ return (
                     </div>
                   </div>
                 )}
+
+                <div className="flex items-center justify-between mt-1 pt-3 border-t border-gray-800">
+                  <span className="text-sm font-medium text-white">Transação Compensada?</span>
+                  <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" id="cleared-toggle-form" checked={isClearedForm} onChange={() => setIsClearedForm(!isClearedForm)} className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600 transition-all z-10" />
+                    <label htmlFor="cleared-toggle-form" className="toggle-label block overflow-hidden h-5 rounded-full bg-gray-700 cursor-pointer transition-colors"></label>
+                  </div>
+                </div>
               </div>
             </div>
 
