@@ -1,5 +1,28 @@
 # Resumo Histórico de Desenvolvimento
 
+## Sessão: 02/05/2026 18:20
+
+### Status Atual
+- Identificada causa raiz da falha de upload: o bucket `receipts` não existe no Supabase.
+- Melhorada a validação de formatos no frontend para evitar falsos negativos em ficheiros `.jpg` e `.pdf`.
+- Disponibilizado script SQL para configuração manual do banco de dados.
+
+### Arquivos Alterados
+- `src/app/page.tsx`
+- `setup_supabase.sql` (Novo arquivo)
+
+### Decisões Técnicas
+- **Validação Dupla:** Passamos a validar tanto o `MIME type` quanto a extensão do ficheiro como fallback, garantindo que ficheiros válidos não sejam bloqueados por inconsistências do navegador.
+- **Tratamento de Erros de Infraestrutura:** O código agora identifica especificamente o erro `Bucket not found` e orienta o utilizador a realizar a configuração necessária.
+- **Segurança (RLS):** O script SQL fornecido configura políticas de RLS granulares, permitindo leitura pública mas restringindo uploads apenas a utilizadores autenticados.
+
+### Pendências (Backlog)
+- **Ação Necessária do Utilizador:** Executar o script `setup_supabase.sql` no painel do Supabase.
+- Integrar uma API real de OCR (ex: OpenAI Vision) para substituir o mock atual.
+- Adicionar compressão de imagem no client-side para otimizar o storage.
+
+---
+
 ## Sessão: 27/04/2026 22:48
 
 ### Status Atual

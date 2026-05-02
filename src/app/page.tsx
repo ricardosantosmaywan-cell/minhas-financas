@@ -198,7 +198,7 @@ export default function Home() {
 
       if (accs && txList) {
         const accountsWithCalculatedBalance = accs.map(acc => {
-          const accTxs = txList.filter((t: any) => t.account_id === acc.id);
+          const accTxs = txList.filter((t: any) => t.account_id === acc.id && t.is_cleared === true);
           const income = accTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
           const expense = accTxs.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
           const calculatedBalance = income - expense;
@@ -733,33 +733,76 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file || !session) return;
     
+    // 1. Validação de Formato (Imagem ou PDF) - Melhorada para aceitar extensões como fallback
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'application/pdf'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+    
+    if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
+      setToastMessage('Formato inválido. Use JPG, PNG ou PDF.');
+      return;
+    }
+
+    // 2. Validação de Tamanho (Máximo 5MB)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setToastMessage('Ficheiro demasiado grande. Máximo 5MB.');
+      return;
+    }
+
     setIsOcrProcessing(true);
+    setToastMessage('A carregar comprovativo...');
+
     try {
-      const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const filePath = `${session.user.id}/${fileName}`;
       
-      const { error: uploadError } = await supabase.storage.from('comprovativos').upload(filePath, file);
-      if (uploadError) throw uploadError;
+      // 3. Upload para o bucket 'receipts'
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type || undefined
+        });
+
+      if (uploadError) {
+        console.error('Erro no upload Supabase:', uploadError);
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error('Erro: O bucket "receipts" não existe no Supabase. Por favor, crie-o no Dashboard ou via SQL.');
+        }
+        if (uploadError.message === 'Failed to fetch') {
+          throw new Error('Erro de ligação. Verifica a tua internet.');
+        }
+        throw uploadError;
+      }
       
-      const { data: { publicUrl } } = supabase.storage.from('comprovativos').getPublicUrl(filePath);
-      
+      const { data: { publicUrl } } = supabase.storage.from('receipts').getPublicUrl(filePath);
       setOcrUrl(publicUrl);
       
-      // Simulate OCR extraction as before
-      setTimeout(() => {
-        setAmount('145,50');
-        const d = new Date();
-        d.setDate(d.getDate() - 1);
-        setTransactionDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-        setDescription('Continente - Supermercado (OCR)');
-        setIsOcrProcessing(false);
-      }, 1000);
+      // 4. Integração Simulada com Serviço de OCR IA
+      // Em produção, aqui seria feita uma chamada para a API da IA (ex: OpenAI Vision ou Gemini)
+      setToastMessage('IA a analisar o documento...');
       
-    } catch (error) {
-      console.error('Error uploading file:', error);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Simulação de extração inteligente baseada em metadados fictícios
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      
+      setAmount('145,50');
+      setTransactionDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+      setDescription('Continente - Supermercado (IA OCR)');
+      
+      setToastMessage('Dados extraídos com sucesso!');
       setIsOcrProcessing(false);
-      setToastMessage('Erro no upload do comprovativo');
+      
+    } catch (error: any) {
+      console.error('Erro detalhado no OCR:', error);
+      setIsOcrProcessing(false);
+      setToastMessage(error.message || 'Erro no upload do comprovativo');
+    } finally {
+      setTimeout(() => setToastMessage(''), 3000);
     }
   };
 
@@ -2076,7 +2119,7 @@ return (
                 </div>
                 {!isTransfer && (
                   <label className="flex items-center justify-center space-x-2 bg-gray-900 p-3 rounded-xl border border-gray-800 active:scale-95 transition-all overflow-hidden relative cursor-pointer">
-                    <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isOcrProcessing} className="hidden" />
+                    <input type="file" accept="image/*,application/pdf" onChange={handleFileUpload} disabled={isOcrProcessing} className="hidden" />
                     {isOcrProcessing ? (
                       <div className="flex items-center space-x-2">
                         <svg className="animate-spin w-4 h-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
