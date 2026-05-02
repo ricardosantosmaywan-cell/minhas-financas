@@ -1,5 +1,31 @@
 # Resumo Histórico de Desenvolvimento
 
+## Sessão: 02/05/2026 22:20
+
+### Status Atual
+- Coluna `is_cleared` adicionada no schema (`setup_supabase.sql`) e mapeamento garantido no cadastro e atualização de transações.
+- Cálculo de saldo global das contas revertido para ser totalitário (todas as transações entram, sem filtro).
+- Exibição do "Saldo Atual" no Dashboard alterada para calcular dinamicamente a diferença (Receitas - Despesas) considerando as datas selecionadas.
+
+### Arquivos Alterados
+- `setup_supabase.sql`
+- `src/app/page.tsx`
+
+### Decisões Técnicas
+- **SQL Updates:** `ALTER TABLE` implementado no script de configuração para resolver a ausência da coluna `is_cleared` que estava causando falhas de gravação.
+- **Isolamento de Saldo do Dashboard:** O número grande no dashboard parou de consultar a `activeAccount.balance` (que é o total global), passando a computar `filteredIncome - filteredExpense`. Isso permite ao usuário ver o fluxo de caixa real do período sem afetar a integridade matemática da conta total.
+- **Segurança de Tipos (Math/NaN):** Aplicado o encapsulamento `Number(t.amount || 0)` em todos os loops `reduce` para garantir que conversões implícitas não falhem nem retornem valores concatenados caso `amount` venha vazio ou como string da base de dados.
+
+### Pendências (Backlog)
+- Confirmar se a propriedade `is_cleared` (Transação Compensada) deve gerar alguma outra ramificação em relatórios PDF ou em filtros avançados no futuro.
+- Executar e testar a funcionalidade da integração de OCR de faturas reais com a IA.
+- **Ação Obrigatória do Usuário:** Rodar o SQL atualizado no Supabase para aplicar o schema novo em produção.
+
+### Contexto de Erros
+- **Bug Fixado:** "Aviso: Could not find the 'is_cleared' column of 'transactions' in the schema cache". Falha ao gravar a despesa corrigida provisionando a coluna através de `setup_supabase.sql`.
+
+---
+
 ## Sessão: 02/05/2026 18:20
 
 ### Status Atual

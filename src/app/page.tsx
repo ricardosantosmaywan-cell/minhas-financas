@@ -198,9 +198,9 @@ export default function Home() {
 
       if (accs && txList) {
         const accountsWithCalculatedBalance = accs.map(acc => {
-          const accTxs = txList.filter((t: any) => t.account_id === acc.id && t.is_cleared === true);
-          const income = accTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-          const expense = accTxs.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+          const accTxs = txList.filter((t: any) => t.account_id === acc.id);
+          const income = accTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+          const expense = accTxs.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
           const calculatedBalance = income - expense;
           console.log(`Saldo da Conta ${acc.name}:`, calculatedBalance, '(Entradas:', income, '- Saídas:', expense, ')');
           return { id: acc.id, name: acc.name, balance: calculatedBalance, income, expense, iconColor: 'bg-blue-600', isDefault: acc.is_default };
@@ -1270,8 +1270,8 @@ export default function Home() {
             const matchEnd = dashboardEndDate ? t.date <= dashboardEndDate : true;
             return matchStart && matchEnd;
           });
-          const filteredIncome = periodTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-          const filteredExpense = periodTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+          const filteredIncome = periodTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+          const filteredExpense = periodTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
           return (
             <div className="mt-2 flex flex-col items-center">
@@ -1288,7 +1288,7 @@ export default function Home() {
                  currentView === 'alerts' ? transactions.filter(t => t.hasReminder).length : 
                  currentView === 'transactions' ? transactions.length :
                  currentView === 'reports' ? '' :
-                 formatCurrency(activeAccount.balance)}
+                 formatCurrency(filteredIncome - filteredExpense)}
               </h1>
               {currentView === 'dashboard' && (
                 <div className="flex flex-col items-center mt-3 space-y-1">
